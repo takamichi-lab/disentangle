@@ -1,0 +1,26 @@
+# spatial_ranges.yml  ── 部屋パラメータ範囲
+TRAINVAL:
+  AREA_MIN: 13.3
+  AREA_MAX: 277.4
+  EL_MIN:  -47.5         # elevation [deg]
+  EL_MAX:   48.7
+  DIST_MIN: 0.5          # distance [m]
+  DIST_MAX: 4.0
+  T30_MIN: 144.5         # full-band T30 [ms]
+  T30_MAX: 2671.9
+ 
+TEST:
+  AREA_MIN: 14.3
+  AREA_MAX: 277.4
+  EL_MIN:  -29.8
+  EL_MAX:   42.4
+  DIST_MIN: 0.9
+  DIST_MAX: 4.0
+  T30_MIN: 167.8
+  T30_MAX: 1254.8
+
+ABS_MIN: 0.05            # 物理的 α 最小
+ABS_MAX: 0.95            # 物理的 α 最大
+
+TRAINVAL_ROOMS: 8952
+TEST_ROOMS:     4970

@@ -1,0 +1,17 @@
+dims:
+- 12.995
+- 7.828
+- 3.0
+area_m2: 101.73
+alpha: 0.1288
+fullband_T30_ms: 1161.9
+source_distance_m: 0.98
+azimuth_deg: -108
+elevation_deg: 17
+source_pos_xyz:
+- 6.208
+- 3.023
+- 1.787
+fs: 48000
+room_id: abd2094d
+split: test

@@ -1,0 +1,75 @@
+# file: config.yaml
+
+# モデルのアーキテクチャ設定
+model:
+  audio_encoder:
+    # AudioEncoderが必要とする引数を具体的に指定します。
+    # TextEncoderを参考に、以下のように設定します。
+    # 実際のクラス定義に合わせて調整してください。
+    # これはAudioEncoderの実装に依存
+    hidden1: 768
+    out_dim: 512
+  text_encoder:
+    # TextEncoderクラスの引数
+    pretrained_model_name: "roberta-base"
+    mlp_hidden_size: 768
+    output_dim: 512
+    max_length: 77
+
+train_dataset:
+  foa_folder:           "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_foa/train"
+  foa_metadata_csv:     "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_csv/manifest_train.csv"
+
+  mono_folder:         "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_mp3/train"
+  mono_metadata_csv:   "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_csv/train.csv"
+
+# validation　setのとき
+# val_dataset:
+#   foa_folder:           "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_foa/val"
+#   foa_metadata_csv:     "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_csv/manifest_val.csv"
+
+#   mono_folder:        "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_mp3/val"
+#   mono_metadata_csv:   "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_csv/val.csv"
+
+#test setのとき
+val_dataset:
+  foa_folder:           "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_foa/test"
+  foa_metadata_csv:     "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/SpatialAudioCaps/SpatialAudioCaps_csv/manifest_test.csv"
+
+  mono_folder:        "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_mp3/test"
+  mono_metadata_csv:   "/home/takamichi-lab-pc09/elsa/Spatial_AudioCaps/takamichi09/AudioCaps/AudioCaps_csv/test.csv"
+
+dataset_mode: both  # foa | audiocaps | both
+
+
+# 訓練の設定
+train:
+  epochs: 30
+  batch_size: 95 # GPUメモリに応じて調整
+  warmup_ratio: 0 # 学習率のウォームアップ期間
+  num_workers: 6    # データ読み込みの並列数
+  resume: false     # チェックポイントから再開するか
+  #checkpoint_path: "/home/takamichi-lab-pc09/elsa/ckpt/takamichi09/elsa_ckck_0711/elsa_epoch_30.pt" #resume用
+  checkpoint_path: "/home/takamichi-lab-pc09/elsa/ckpt/takamichi09/elsa_ckck_0706/elsa_epoch_40.pt" #resume用
+  accumulation_steps: 5  # 勾配の累積ステップ数
+  check_point_folder_path: "/home/takamichi-lab-pc09/elsa/ckpt/takamichi09/elsa_ckck_0711"
+# オプティマイザの設定
+# optimizer:
+# name: "AdamW"
+# lr: 5.0e-5
+# #betas: [0.9, 0.999]
+# eps: 1.0e-08
+# weight_decay: 1.0e-2
+
+optimizer:
+  name: "Adam"      # <-- この行を "Adam" に変更
+  lr: 5.0e-5 # 学習率
+  weight_decay: 0.0 # <-- Adamの場合、通常は0か、小さい値を設定
+
+# ... (他の設定は変更なし) ...
+# 損失の重み付け設定
+loss_weights:
+  clip: 1.0     # 基準
+  dir:  1.0     # 方向損失
+  dist: 1.0     # 距離損失
+  area: 1.0  # 面積損失のスケールを大幅に下げる
