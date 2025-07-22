@@ -3,7 +3,7 @@ from pathlib import Path
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
-
+# これは生の波形を返す
 # audiocap_id,youtube_id,start_time,caption
 # 91139,r1nicOVtvkQ,130,A woman talks nearby as water pours
 #.venv) takamichi-lab-pc09@takamichi-lab-pc09:~/DELSA$ python3 dataset/check_dataset.py     --audio_csv  /home/takamichi-lab-pc09/DELSA/AudioCaps_csv/train.csv     

@@ -1,4 +1,4 @@
-# file: models/elsa_model.py
+# file: models/delsa_model.py
 
 import torch
 import torch.nn as nn
@@ -8,7 +8,7 @@ import numpy as np
 
 # DELSAでは一旦、物理損失および物理量用のMLPは無視
 
-class ELSA(nn.Module):
+class DELSA(nn.Module):
     """
     論文のアーキテクチャ全体を統合したELSAモデル。
     """
