@@ -1,0 +1,3 @@
+data:
+  share_rir_across_batch: true  # true: 同一バッチ内は同じRIRを使う、false: 各サンプルごとに個別選択
+  n_views: 2

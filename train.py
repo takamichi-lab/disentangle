@@ -63,11 +63,13 @@ def main():
         base_dir=args.audio_base,
         csv_rir=args.rir_csv,
         n_views=args.n_views,
+        config_path= "config.yaml",
         split=args.split,
+        batch_size = args.batch_size
     )
     dl = DataLoader(ds, batch_size=args.batch_size,
                     shuffle=True, num_workers=4,
-                    collate_fn=collate_fn, pin_memory=True)
+                    collate_fn=collate_fn, pin_memory=False)
 
     from model.delsa_model import DELSA      # アップロード済みモデル
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(args.device)
@@ -81,10 +83,12 @@ def main():
                           for k in ("i_act","i_rea","omni_48k")}
             texts  = batch["texts"]
             src_lb = batch["source_id"].reshape(-1).to(args.device)  # [B']
-            spc_lb = batch["space_id"].reshape(-1).to(args.device)
-
+         
+            spa_lb = batch["space_id"].reshape(-1).to(args.device)
+            print(spa_lb)
             # ----------- forward ------------
             out = model(audio_dict, texts)   # expect 4 embeddings + logit_scale
+
             a_s  = F.normalize(out["audio_space_emb"],  dim=-1)
             t_s  = F.normalize(out["text_space_emb"],   dim=-1)
             a_src= F.normalize(out["audio_source_emb"], dim=-1)
@@ -92,7 +96,7 @@ def main():
 
             T = out["logit_scale"].exp()     # 温度
 
-            loss_space  = sup_contrast(a_s,  t_s,  spc_lb, T)
+            loss_space  = sup_contrast(a_s,  t_s,  spa_lb, T)
             loss_source = sup_contrast(a_src,t_src,src_lb, T)
             loss = 0.5 * (loss_space + loss_source)
 

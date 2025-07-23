@@ -1,9 +1,12 @@
 # dataset/audio_rir_dataset.py  — 改訂版
 import random, math, torchaudio, torch, pandas as pd
+import yaml
 from pathlib import Path
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
+import numpy as np
+import soundfile   as sf
 # ToDo;SALSAの論文の実装に合わせる。0のときの処理を
  #ToDo: A-format to B-format
  # #ToDo: captionも空間拡張する
@@ -86,9 +89,18 @@ class AudioRIRDataset(Dataset):
                  n_views: int = 1,
                  split: str = "train",
                  n_fft: int = 400,
+                 config_path: str = "config.yaml",
+                 batch_size : int | None = None,
                  hop: int =100):
         super().__init__()
-
+        # ── 設定ロード ──
+        cfg = yaml.safe_load(Path(config_path).read_text())
+        dcfg = cfg["data"]
+        self.share_rir = dcfg.get("share_rir_across_batch", False)
+        self.batch_size = batch_size
+        self._emmited = 0 # なんサンプルか返したか
+        self._batch_rir = None # 現バッチ用RIRをキャッシュする
+        self.n_views   = dcfg.get("n_views", 1)
         self.base_dir = Path(base_dir)
         self.split = split
         self.n_views = n_views
@@ -111,6 +123,7 @@ class AudioRIRDataset(Dataset):
         # RIR ごとのメタ dict
         self.rir_meta  = {row["rir_path"]: row.to_dict() for _, row in rir_df.iterrows()}
 
+
     def __len__(self):
         return len(self.audio_df)
     
@@ -126,10 +139,22 @@ class AudioRIRDataset(Dataset):
         return wav
     
     def _apply_rir(self, dry: torch.Tensor, rir_path: str) -> torch.Tensor:
-        rir, _ = torchaudio.load(rir_path)            # [4,Tr] (FOA)
+        rir, sr = torchaudio.load(rir_path)            # [4,Tr] (FOA)
         wet = torchaudio.functional.fftconvolve(dry, rir)  # [4,T+Tr-1]
         wet = wet[..., :dry.shape[-1]]               # クロップ → 10 s
-        return wet
+    # ---------- RIR 畳み込み（A-format 4ch） ----------
+  
+        m0, m1, m2, m3 = wet[0], wet[1], wet[2], wet[3]
+
+        # ---------- A → B (First-order Ambisonics, FOA) ----------
+        W =  (m0 +  m1 +  m2 +  m3)/2
+        X =  (m0 +  m1 -  m2 -  m3)/2
+        Y =  (m0 -  m1 +  m2 -  m3)/2
+        Z =  (m0 -  m1 -  m2 +  m3)/2
+        foa = torch.stack([W, Y, Z, X])
+        #print(sr)
+        sf.write('foa.wav', foa.T, sr)
+        return foa
 
 
     def __getitem__(self, idx: int):
@@ -141,12 +166,28 @@ class AudioRIRDataset(Dataset):
 
         audio_features_list = []
         src_ids, spa_ids, texts = [], [], []
+        if self.share_rir:
+            # バッチ頭だったらRIRを選び直す
+            if self._batch_rir is None:
+                self._batch_rir = random.sample(self.rir_paths, k = self.n_views)
+            rir_paths = self._batch_rir
 
-        for _ in range(self.n_views):
-            rir_path = random.choice(self.rir_paths)
+            # サンプルを返すたびに、カウンタを進める。バッチ終端でキャッシュを破棄
+            self._emmited += 1
+            if self.batch_size and self._emmited % self.batch_size == 0:
+                self._batch_rir = None
+            
+            # エポック最終サンプルのとき
+            if self._emmited == len(self):
+                self._batch_rir = None # 次エポック用にリセット
+                self._emmited = 0
+        else:
+            rir_paths = random.sample(self.rir_paths, k=self.n_views)
+
+        for rir_path in rir_paths:
             wet = self._apply_rir(dry, rir_path) #[4, T10]   
-            #ToDo: A-format to B-format
-             #ToDo: captionも空間拡張する
+            #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
+             #ToDo済: captionも空間拡張する(ルールべースの書き換え)
             meta = self.rir_meta[rir_path]
             caption_spatial = rewrite_caption(caption, meta)
             omni_48k = wet[0]  # [T10]
@@ -179,8 +220,6 @@ def collate_fn(batch):
         spa_list.append(sample["space_id"])
 
     # 辞書の中身 (i_act etc.) はテンソルなのでそのままリストで扱い
-
-    print(text_list)
     return {
         "audio": audio_list,              # len=B*n_views
         "texts": text_list,               # len=B*n_views
