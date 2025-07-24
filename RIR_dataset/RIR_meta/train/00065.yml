@@ -1,0 +1,17 @@
+dims:
+- 9.895
+- 4.014
+- 3.0
+area_m2: 39.72
+alpha: 0.0981
+fullband_T30_ms: 1200.7
+source_distance_m: 1.05
+azimuth_deg: -117
+elevation_deg: -40
+source_pos_xyz:
+- 4.582
+- 1.29
+- 0.825
+fs: 48000
+room_id: ec7069fd
+split: train

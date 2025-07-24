@@ -1,0 +1,17 @@
+dims:
+- 6.227
+- 2.656
+- 3.0
+area_m2: 16.54
+alpha: 0.0506
+fullband_T30_ms: 1826.9
+source_distance_m: 0.87
+azimuth_deg: 143
+elevation_deg: 0
+source_pos_xyz:
+- 2.419
+- 1.852
+- 1.5
+fs: 48000
+room_id: 57d11c4f
+split: train

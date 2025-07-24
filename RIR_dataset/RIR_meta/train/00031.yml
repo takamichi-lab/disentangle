@@ -1,0 +1,17 @@
+dims:
+- 19.171
+- 12.134
+- 3.0
+area_m2: 232.63
+alpha: 0.1161
+fullband_T30_ms: 1481.6
+source_distance_m: 1.65
+azimuth_deg: 131
+elevation_deg: 46
+source_pos_xyz:
+- 8.834
+- 6.932
+- 2.687
+fs: 48000
+room_id: ee660a4c
+split: train

@@ -1,0 +1,17 @@
+dims:
+- 11.266
+- 6.432
+- 3.0
+area_m2: 72.46
+alpha: 0.07
+fullband_T30_ms: 1990.4
+source_distance_m: 1.36
+azimuth_deg: 118
+elevation_deg: -3
+source_pos_xyz:
+- 4.995
+- 4.415
+- 1.429
+fs: 48000
+room_id: 3090aff1
+split: train

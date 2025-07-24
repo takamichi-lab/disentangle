@@ -1,0 +1,17 @@
+dims:
+- 19.658
+- 8.35
+- 3.0
+area_m2: 164.14
+alpha: 0.0687
+fullband_T30_ms: 2325.6
+source_distance_m: 2.63
+azimuth_deg: -125
+elevation_deg: 26
+source_pos_xyz:
+- 8.473
+- 2.239
+- 2.653
+fs: 48000
+room_id: ef48dc25
+split: train

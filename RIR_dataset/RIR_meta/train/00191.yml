@@ -1,0 +1,17 @@
+dims:
+- 20.265
+- 11.59
+- 3.0
+area_m2: 234.86
+alpha: 0.0651
+fullband_T30_ms: 2638.8
+source_distance_m: 3.4
+azimuth_deg: -82
+elevation_deg: 7
+source_pos_xyz:
+- 10.602
+- 2.453
+- 1.914
+fs: 48000
+room_id: a6054dc2
+split: train

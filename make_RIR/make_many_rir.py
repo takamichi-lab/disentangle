@@ -4,8 +4,8 @@ import tqdm, random, json
 from gen_one_rir import gen_one_rir, _rand_room
 
 BASE = Path("RIR_dataset")
-N_RIRS = 10
-split = "test"
+N_RIRS = 1000
+split = "train"
 BASE.mkdir(exist_ok=True)
 
 # toDo:trainとvalで重ならないようにする。

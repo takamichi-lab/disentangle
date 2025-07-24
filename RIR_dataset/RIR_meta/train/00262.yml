@@ -1,0 +1,17 @@
+dims:
+- 23.719
+- 10.443
+- 3.0
+area_m2: 247.71
+alpha: 0.0948
+fullband_T30_ms: 1802.7
+source_distance_m: 2.38
+azimuth_deg: -48
+elevation_deg: -29
+source_pos_xyz:
+- 13.252
+- 3.675
+- 0.346
+fs: 48000
+room_id: ec409122
+split: train

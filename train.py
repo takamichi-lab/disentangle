@@ -4,6 +4,16 @@ import argparse, torch, torch.nn.functional as F
 from torch.utils.data import DataLoader
 from pathlib import Path
 import random
+import wandb
+
+
+# 容積の分類のloss
+# 音源の分類のloss 犬とか
+# adversarial loss 
+    # sourceの埋め込みからはspaceの埋め込みを予測できないようにする。
+    # 音源の分類は　spatialの埋め込みからはできないようにする。
+
+# 3週間くらいで結果揃える
 
 random.seed(42)  # 再現性のため
 
@@ -21,6 +31,9 @@ def parse():
     ap.add_argument("--epochs",    type=int, default=5)
     ap.add_argument("--lr",        type=float, default=1e-4)
     ap.add_argument("--device",    default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--wandb", action="store_true")
+    ap.add_argument("--proj", default="delsa-sup-contrast", help="wandb project name")
+    ap.add_argument("--run_name", default=None, help="wandb run name")
     return ap.parse_args()
 
 
@@ -30,7 +43,8 @@ def parse():
 
 
 
-# ───────── Supervised cross-modal contrastive loss ─────────
+# ───────── sSupervised cross-modal contrastive los ─────────
+# ToDo;sup_contrastの公式実装見る：https://github.com/HobbitLong/SupContrast?utm_source=chatgpt.com
 def sup_contrast(a, b, labels, logit_scale, eps=1e-8):
     a = F.normalize(a, dim=1)
     b = F.normalize(b, dim=1)
@@ -58,6 +72,11 @@ def sup_contrast(a, b, labels, logit_scale, eps=1e-8):
 def main():
     args = parse()
     from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn
+    if args.wandb:
+        wandb.init(project=args.proj,
+                   name = args.run_name,
+                   config = vars(args),
+                   mode="online")
     ds = AudioRIRDataset(
         csv_audio=args.audio_csv,
         base_dir=args.audio_base,
@@ -94,10 +113,33 @@ def main():
             a_src= F.normalize(out["audio_source_emb"], dim=-1)
             t_src= F.normalize(out["text_source_emb"],  dim=-1)
 
-            T = out["logit_scale"].exp()     # 温度
+            pred_physics = {
+                "direction": out["direction"],  
+                "area": out["area"],
+                "distance": out["distance"],
+                "reverb": out["reverb"]
+            }     
 
+            T = out["logit_scale"].exp()     # 温度
             loss_space  = sup_contrast(a_s,  t_s,  spa_lb, T)
             loss_source = sup_contrast(a_src,t_src,src_lb, T)
+            # 物理量の予測損失 　今下書きだから、直す
+            # loss_physics = 0.0
+            # for key, pred in pred_physics.items():
+            #     if key == "direction":
+            #         target = batch["rir_meta"]["azimuth_deg"].to(args.device) and batch["rir_meta"]["elevation_deg"].to(args.device)
+            #         loss_physics += F.mse_loss(pred, target)
+            #     elif key == "area":
+            #         target = batch["rir_meta"]["area_m2"].to(args.device)
+            #         loss_physics += F.mse_loss(pred, target)
+            #     elif key == "distance":                     
+            #         target = batch["rir_meta"]["source_distance_m"].to(args.device)
+            #         loss_physics += F.mse_loss(pred, target)
+            #     elif key == "reverb":       
+            #         target = batch["rir_meta"]["fullband_T30_ms"].to(args.device)
+            #         loss_physics += F.mse_loss(pred, target)
+            #     else:
+            #         raise ValueError(f"Unknown key: {key}") 
             loss = 0.5 * (loss_space + loss_source)
 
             opt.zero_grad()
@@ -107,6 +149,15 @@ def main():
             if step % 10 == 0:
                 print(f"Epoch {ep} Step {step}/{len(dl)}  "
                       f"space={loss_space:.4f}  src={loss_source:.4f}")
+                if args.wandb:
+                    wandb.log({
+                        "loss/space": loss_space.item(),
+                        "loss/source": loss_source.item(),
+                        "loss/mean": loss.item(),
+                        "epoch": ep,
+                        "step": step + (ep-1)*len(dl)
+                    })
+
 
         # -------- checkpoint -------------
         ckpt_dir = Path("checkpoints"); ckpt_dir.mkdir(exist_ok=True)
@@ -117,4 +168,8 @@ def main():
         print(f"[✓] Saved checkpoint for epoch {ep}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        if wandb.run is not None:
+            wandb.finish()

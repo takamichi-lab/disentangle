@@ -1,0 +1,17 @@
+dims:
+- 5.535
+- 4.46
+- 3.0
+area_m2: 24.69
+alpha: 0.0509
+fullband_T30_ms: 2142.2
+source_distance_m: 0.72
+azimuth_deg: 102
+elevation_deg: -28
+source_pos_xyz:
+- 2.635
+- 2.852
+- 1.162
+fs: 48000
+room_id: ddfc951f
+split: train

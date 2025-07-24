@@ -1,0 +1,17 @@
+dims:
+- 15.979
+- 13.052
+- 3.0
+area_m2: 208.56
+alpha: 0.0658
+fullband_T30_ms: 2589.2
+source_distance_m: 0.7
+azimuth_deg: -178
+elevation_deg: -3
+source_pos_xyz:
+- 7.291
+- 6.502
+- 1.463
+fs: 48000
+room_id: deddedc3
+split: train

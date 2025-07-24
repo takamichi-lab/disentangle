@@ -1,0 +1,17 @@
+dims:
+- 13.408
+- 8.278
+- 3.0
+area_m2: 111.0
+alpha: 0.0904
+fullband_T30_ms: 1685.1
+source_distance_m: 3.85
+azimuth_deg: -107
+elevation_deg: 19
+source_pos_xyz:
+- 5.64
+- 0.658
+- 2.753
+fs: 48000
+room_id: dc4023be
+split: train

@@ -1,0 +1,17 @@
+dims:
+- 15.453
+- 8.878
+- 3.0
+area_m2: 137.2
+alpha: 0.1332
+fullband_T30_ms: 1183.5
+source_distance_m: 2.71
+azimuth_deg: 171
+elevation_deg: -28
+source_pos_xyz:
+- 5.363
+- 4.813
+- 0.228
+fs: 48000
+room_id: bfcac388
+split: train

@@ -1,0 +1,17 @@
+dims:
+- 9.897
+- 4.779
+- 3.0
+area_m2: 47.3
+alpha: 0.05
+fullband_T30_ms: 2571.8
+source_distance_m: 0.83
+azimuth_deg: 57
+elevation_deg: 39
+source_pos_xyz:
+- 5.3
+- 2.93
+- 2.022
+fs: 48000
+room_id: acb82791
+split: train

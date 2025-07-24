@@ -5,8 +5,11 @@ import torch.nn as nn
 from .shared_audio_encoder import AudioEncoder
 from .shared_text_encoder import TextEncoder
 import numpy as np
-
+from .RegressionHead import RegressionHead_for_physicalValue
 # DELSAでは一旦、物理損失および物理量用のMLPは無視
+
+
+
 
 class DELSA(nn.Module):
     """
@@ -49,7 +52,10 @@ class DELSA(nn.Module):
         # 学習可能な温度パラメータ (CLIPの初期値)
         initial_value = np.log(1 / 0.07)
         self.logit_scale = nn.Parameter(torch.tensor(initial_value, dtype=torch.float32))
-
+        self.direction_head = RegressionHead_for_physicalValue(out_space_dim, 2)  # 方向の予測ヘッド
+        self.area_head = RegressionHead_for_physicalValue(out_space_dim, 1)      # 面積の予測ヘッド
+        self.distance_head = RegressionHead_for_physicalValue(out_space_dim, 1)  # 距離の予測ヘッド
+        self.reverb_head = RegressionHead_for_physicalValue(out_space_dim, 1)    # 残響時間の予測ヘッド
 
     def forward(self, audio_data: torch.Tensor, text_data: torch.Tensor):
         """
@@ -70,11 +76,26 @@ class DELSA(nn.Module):
         # --- テキストの埋め込み分岐 ---
         z_space_t  = self.text_space_head(text_shared_embeds)     # 空間ベクトル [B, out_space_dim]
         z_source_t = self.text_source_head(text_shared_embeds)    # 音源ベクトル [B, out_source_dim]
+
+        # --- 物理量の予測 ---
+        direction = self.direction_head(z_space_a)  # 方向の予測 [B, 2]
+        area = self.area_head(z_space_a)            # 面積の予測 [B, 1]
+        distance = self.distance_head(z_space_a)    # 距離の予測 [B, 1]
+        reverb = self.reverb_head(z_space_a)      # 残響時間の予測 [B, 1]
+        # --- 出力を辞書形式でまとめる ---
+        # ここで、各埋め込みと物理量の予測を辞書にまとめて返す
+        # これにより、モデルの出力を簡単に扱えるようにする
+        # 例えば、損失計算や評価指標の計算に利用できる
+        
         return {
             "audio_space_emb": z_space_a,          # 音の空間埋め込み (B, out_space_dim)
             "audio_source_emb": z_source_a,         # 音のソース埋め込み(B, out_source_dim)
             "text_space_emb": z_space_t,           # テキストの空間埋め込み (B, out_space_dim)
             "text_source_emb": z_source_t,          # テキストのソース埋め込み (B, out_source_dim)
-            "logit_scale": self.logit_scale   # 学習可能な温度パラメータ
+            "logit_scale": self.logit_scale,   # 学習可能な温度パラメータ
+            "direction": direction,                # 方向の予測 (B, 2)
+            "area": area,                          # 面積の予測 (B, 1)
+            "distance": distance,                  # 距離の予測 (B, 1)
+            "reverb": reverb                       # 残響時間の予測 (B, 1)
 
         }

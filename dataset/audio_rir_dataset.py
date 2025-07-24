@@ -44,7 +44,7 @@ def rewrite_caption(orig: str, meta: dict) -> str:
 
     return f"{orig} in {room}.".replace("  ", " ")
 
-
+# ランダム性があっても良い. 文章の順番を入れ替えたり、
 # ------- foa_to_iv (同じものをインポートしても可) --------------------------
 def foa_to_iv(
     foa_wave: torch.Tensor,
@@ -165,7 +165,7 @@ class AudioRIRDataset(Dataset):
         dry = self._load_dry(audiocap_id)
 
         audio_features_list = []
-        src_ids, spa_ids, texts = [], [], []
+        src_ids, spa_ids, texts, rir_meta = [], [], [], []
         if self.share_rir:
             # バッチ頭だったらRIRを選び直す
             if self._batch_rir is None:
@@ -201,23 +201,25 @@ class AudioRIRDataset(Dataset):
             src_ids.append(self.source_map[idx])
             spa_ids.append(self.space_map[rir_path])
             texts.append(caption_spatial)
-
+            rir_meta.append(meta)
         return{
             "audio": audio_features_list,  # 各ビューの音声特徴
             "texts": texts,                # キャプション
             "source_id": torch.tensor(src_ids, dtype=torch.long), 
             "space_id": torch.tensor(spa_ids, dtype=torch.long),
-        }
+            "rir_meta": rir_meta,          # RIRメタデータ
+        }   
     
 # ---------------- collate_fn (4 ch → 特徴辞書) -----------------------------
 def collate_fn(batch):
     # “audio” は list[n_views] × B をフラット化して返す
-    audio_list, text_list, src_list, spa_list = [], [], [], []
+    audio_list, text_list, src_list, spa_list, rir_meta_list = [], [], [], [], []
     for sample in batch:
         audio_list += sample["audio"]
         text_list  += sample["texts"]
         src_list.append(sample["source_id"])
         spa_list.append(sample["space_id"])
+        rir_meta_list.append(sample["rir_meta"])
 
     # 辞書の中身 (i_act etc.) はテンソルなのでそのままリストで扱い
     return {
@@ -225,4 +227,5 @@ def collate_fn(batch):
         "texts": text_list,               # len=B*n_views
         "source_id": torch.vstack(src_list),  # shape [B,n_views]
         "space_id" : torch.vstack(spa_list),
+        "rir_meta": rir_meta_list,        # RIRメタデータのリスト
     }
