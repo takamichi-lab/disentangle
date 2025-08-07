@@ -1,0 +1,18 @@
+Some weights of RobertaModel were not initialized from the model checkpoint at roberta-base and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/home/takamichi-lab-pc09/DELSA/train.py:197: UserWarning: Using a target size (torch.Size([16])) that is different to the input size (torch.Size([16, 1])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  loss_area = F.mse_loss(pred_physics["area"], true_physics["area"])
+/home/takamichi-lab-pc09/DELSA/train.py:198: UserWarning: Using a target size (torch.Size([16])) that is different to the input size (torch.Size([16, 1])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  loss_distance= F.mse_loss(pred_physics["distance"], true_physics["distance"])
+/home/takamichi-lab-pc09/DELSA/train.py:199: UserWarning: Using a target size (torch.Size([16])) that is different to the input size (torch.Size([16, 1])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  loss_reverb = F.mse_loss(pred_physics["reverb"], true_physics["reverb"])
+Epoch 1 Step 10/5652  space=3.0024  src=3.0101
+Epoch 1 Step 20/5652  space=2.8596  src=2.8393
+Epoch 1 Step 30/5652  space=2.8065  src=2.7751
+Epoch 1 Step 40/5652  space=2.7924  src=2.7747
+Epoch 1 Step 50/5652  space=2.7960  src=2.7720
+Epoch 1 Step 60/5652  space=2.7808  src=2.7719
+Epoch 1 Step 70/5652  space=2.7749  src=2.7773
+Epoch 1 Step 80/5652  space=2.7778  src=2.7774
+Epoch 1 Step 90/5652  space=2.7752  src=2.7745
+Epoch 1 Step 100/5652  space=2.7801  src=2.7772

@@ -1,0 +1,18 @@
+Some weights of RobertaModel were not initialized from the model checkpoint at roberta-base and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Epoch 1 Step 10/5652  space=4.3762  src=4.0249
+Epoch 1 Step 20/5652  space=3.5160  src=3.5243
+Epoch 1 Step 30/5652  space=3.4833  src=3.4741
+Epoch 1 Step 40/5652  space=3.4824  src=3.4724
+Epoch 1 Step 50/5652  space=3.4725  src=3.4702
+Epoch 1 Step 60/5652  space=3.4703  src=3.4683
+Epoch 1 Step 70/5652  space=3.4698  src=3.4672
+Epoch 1 Step 80/5652  space=3.4683  src=3.4681
+Epoch 1 Step 90/5652  space=3.4723  src=3.4670
+Epoch 1 Step 100/5652  space=3.4671  src=3.4688
+Epoch 1 Step 110/5652  space=3.4680  src=3.4672
+Epoch 1 Step 120/5652  space=3.4679  src=3.4685
+Epoch 1 Step 130/5652  space=3.4648  src=3.4686
+Epoch 1 Step 140/5652  space=3.4674  src=3.4675
+Epoch 1 Step 150/5652  space=3.4681  src=3.4669
+Epoch 1 Step 160/5652  space=3.4695  src=3.4675

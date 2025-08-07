@@ -6,10 +6,6 @@ from .shared_audio_encoder import AudioEncoder
 from .shared_text_encoder import TextEncoder
 import numpy as np
 from .RegressionHead import RegressionHead_for_physicalValue
-# DELSAでは一旦、物理損失および物理量用のMLPは無視
-
-
-
 
 class DELSA(nn.Module):
     """

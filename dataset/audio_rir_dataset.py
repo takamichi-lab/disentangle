@@ -89,18 +89,17 @@ class AudioRIRDataset(Dataset):
                  n_views: int = 1,
                  split: str = "train",
                  n_fft: int = 400,
-                 config_path: str = "config.yaml",
+                 share_rir: bool = True,
                  batch_size : int | None = None,
+                 stats_path: str = "/home/takamichi-lab-pc09/DELSA/RIR_dataset/stats.pt",
                  hop: int =100):
         super().__init__()
         # ── 設定ロード ──
-        cfg = yaml.safe_load(Path(config_path).read_text())
-        dcfg = cfg["data"]
-        self.share_rir = dcfg.get("share_rir_across_batch", False)
+
+        self.share_rir = share_rir
         self.batch_size = batch_size
         self._emmited = 0 # なんサンプルか返したか
         self._batch_rir = None # 現バッチ用RIRをキャッシュする
-        self.n_views   = dcfg.get("n_views", 1)
         self.base_dir = Path(base_dir)
         self.split = split
         self.n_views = n_views
@@ -122,6 +121,15 @@ class AudioRIRDataset(Dataset):
 
         # RIR ごとのメタ dict
         self.rir_meta  = {row["rir_path"]: row.to_dict() for _, row in rir_df.iterrows()}
+        
+        #物理量を正規化するためののコード
+        stats = torch.load(stats_path)
+        self.area_mean = stats["area_m2"]["mean"]
+        self.area_std  = stats["area_m2"]["std"]
+        self.dist_mean = stats["distance"]["mean"]
+        self.dist_std  = stats["distance"]["std"]
+        self.t30_mean  = stats["fullband_T30_ms"]["mean"]
+        self.t30_std   = stats["fullband_T30_ms"]["std"]
 
 
     def __len__(self):
@@ -188,7 +196,17 @@ class AudioRIRDataset(Dataset):
             wet = self._apply_rir(dry, rir_path) #[4, T10]   
             #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
              #ToDo済: captionも空間拡張する(ルールべースの書き換え)
-            meta = self.rir_meta[rir_path]
+            meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
+            meta["area_m2_norm"]  = (meta["area_m2"]           - self.area_mean) / self.area_std
+            meta["distance_norm"] = (meta["source_distance_m"] - self.dist_mean) / self.dist_std
+            meta["t30_norm"]      = (meta["fullband_T30_ms"]   - self.t30_mean)  / self.t30_std
+            azimuth = meta["azimuth_deg"]
+            elevation = meta["elevation_deg"]
+            direction_vec = torch.tensor(
+                [np.deg2rad(azimuth), np.deg2rad(elevation)],
+                dtype=torch.float32
+            )
+            meta["direction_vec"] = direction_vec
             caption_spatial = rewrite_caption(caption, meta)
             omni_48k = wet[0]  # [T10]
             
@@ -212,20 +230,39 @@ class AudioRIRDataset(Dataset):
     
 # ---------------- collate_fn (4 ch → 特徴辞書) -----------------------------
 def collate_fn(batch):
-    # “audio” は list[n_views] × B をフラット化して返す
+    # 既存の flatten 処理
     audio_list, text_list, src_list, spa_list, rir_meta_list = [], [], [], [], []
     for sample in batch:
         audio_list += sample["audio"]
         text_list  += sample["texts"]
         src_list.append(sample["source_id"])
         spa_list.append(sample["space_id"])
-        rir_meta_list.append(sample["rir_meta"])
+        rir_meta_list += sample["rir_meta"]
+    # ------------------------
 
-    # 辞書の中身 (i_act etc.) はテンソルなのでそのままリストで扱い
+    # RIR メタデータを key ごとにまとめる
+    meta_keys = rir_meta_list[0].keys()
+    rir_meta_dict = {}
+    for key in meta_keys:
+        vals = [m[key] for m in rir_meta_list]
+        first = vals[0]
+
+        # 1) Tensor の場合 → stack
+        if isinstance(first, torch.Tensor):
+            rir_meta_dict[key] = torch.stack(vals, dim=0)
+
+        # 2) 数値（int/float）の場合 → float tensor
+        elif isinstance(first, (int, float)):
+            rir_meta_dict[key] = torch.tensor(vals, dtype=torch.float32)
+
+        # 3) 文字列などその他 → そのままリストで保持
+        else:
+            rir_meta_dict[key] = vals
+
     return {
-        "audio": audio_list,              # len=B*n_views
-        "texts": text_list,               # len=B*n_views
-        "source_id": torch.vstack(src_list),  # shape [B,n_views]
-        "space_id" : torch.vstack(spa_list),
-        "rir_meta": rir_meta_list,        # RIRメタデータのリスト
+        "audio": audio_list,
+        "texts": text_list,
+        "source_id": torch.vstack(src_list),
+        "space_id":  torch.vstack(spa_list),
+        "rir_meta":  rir_meta_dict,  # dict of tensors or lists
     }

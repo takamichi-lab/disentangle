@@ -1,3 +1,21 @@
-data:
-  share_rir_across_batch: true  # true: 同一バッチ内は同じRIRを使う、false: 各サンプルごとに個別選択
-  n_views: 2
+
+#train
+audio_csv_train: AudioCaps_csv/train.csv 
+rir_csv_train:   RIR_dataset/rir_catalog_train.csv
+
+# val
+audio_csv_val:  AudioCaps_csv/val.csv        # 省略可
+rir_csv_val:   RIR_dataset/rir_catalog_val.csv        # 省略可
+
+#予め作っておく クラスタ分散とMIG用
+SpatialAudio_csv_val: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio 
+
+audio_base: AudioCaps_mp3 
+batch_size: 8
+n_views: 2
+epochs: 5
+lr: 0.0001
+device: auto            # "auto" → cuda if available
+wandb: true
+proj: delsa-sup-contrast
+run_name: None

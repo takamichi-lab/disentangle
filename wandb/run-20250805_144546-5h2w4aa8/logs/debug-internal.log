@@ -1,0 +1,16 @@
+{"time":"2025-08-05T14:45:46.338982932+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250805_144546-5h2w4aa8/logs/debug-core.log"}
+{"time":"2025-08-05T14:45:46.619734804+09:00","level":"INFO","msg":"created new stream","id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:46.619753744+09:00","level":"INFO","msg":"stream: started","id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:46.619789563+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:46.619834758+09:00","level":"INFO","msg":"handler: started","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:46.619836414+09:00","level":"INFO","msg":"sender: started","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:46.898166782+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-05T14:45:56.513162179+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-05T14:45:56.513542205+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-05T14:45:57.144075421+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-05T14:45:57.361753742+09:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-05T14:45:57.363058727+09:00","level":"INFO","msg":"stream: closing","id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:57.363062349+09:00","level":"INFO","msg":"handler: closed","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:57.363064777+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:57.363088845+09:00","level":"INFO","msg":"sender: closed","stream_id":"5h2w4aa8"}
+{"time":"2025-08-05T14:45:57.363091922+09:00","level":"INFO","msg":"stream: closed","id":"5h2w4aa8"}

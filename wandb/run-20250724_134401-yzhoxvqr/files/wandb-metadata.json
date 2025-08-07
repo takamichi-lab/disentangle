@@ -1,0 +1,59 @@
+{
+  "os": "Linux-6.14.0-24-generic-x86_64-with-glibc2.39",
+  "python": "CPython 3.12.3",
+  "startedAt": "2025-07-24T04:44:01.376263Z",
+  "args": [
+    "--audio_csv",
+    "AudioCaps_csv/train.csv",
+    "--rir_csv",
+    "RIR_dataset/rir_catalog_train.csv",
+    "--audio_base",
+    "AudioCaps_mp3",
+    "--batch_size",
+    "8",
+    "--n_views",
+    "4",
+    "--epochs",
+    "5",
+    "--lr",
+    "1e-4",
+    "--wandb"
+  ],
+  "program": "/home/takamichi-lab-pc09/DELSA/train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "https://github.com/takamichi-lab/disentangle.git",
+    "commit": "2a706c62090adacc4218ef9abd8e2fb85f472349"
+  },
+  "email": "uesho131@keio.jp",
+  "root": "/home/takamichi-lab-pc09/DELSA",
+  "host": "takamichi-lab-pc09",
+  "executable": "/home/takamichi-lab-pc09/DELSA/.venv/bin/python3",
+  "codePathLocal": "train.py",
+  "cpu_count": 24,
+  "cpu_count_logical": 32,
+  "gpu": "NVIDIA RTX A6000",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1005867986944",
+      "used": "848455925760"
+    }
+  },
+  "memory": {
+    "total": "67255705600"
+  },
+  "cpu": {
+    "count": 24,
+    "countLogical": 32
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.8"
+}

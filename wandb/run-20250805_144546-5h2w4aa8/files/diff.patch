@@ -1,0 +1,610 @@
+diff --git a/config.yaml b/config.yaml
+index 52f28b0..372e2f5 100644
+--- a/config.yaml
++++ b/config.yaml
+@@ -1,3 +1,14 @@
+-data:
+-  share_rir_across_batch: true  # true: 同一バッチ内は同じRIRを使う、false: 各サンプルごとに個別選択
+-  n_views: 2
++audio_csv_train: AudioCaps_csv/train.csv 
++rir_csv_train:   RIR_dataset/rir_catalog_train.csv
++
++audio_csv_val:  AudioCaps_csv/val.csv        # 省略可
++rir_csv_val:   RIR_dataset/rir_catalog_val.csv        # 省略可
++audio_base: AudioCaps_mp3 
++batch_size: 8
++n_views: 2
++epochs: 5
++lr: 0.0001
++device: auto            # "auto" → cuda if available
++wandb: true
++proj: delsa-sup-contrast
++run_name: exp01
+\ No newline at end of file
+diff --git a/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc b/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc
+index 1238537..bfabfb8 100644
+Binary files a/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc and b/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc differ
+diff --git a/dataset/audio_rir_dataset.py b/dataset/audio_rir_dataset.py
+index 18d1892..f0f669a 100644
+--- a/dataset/audio_rir_dataset.py
++++ b/dataset/audio_rir_dataset.py
+@@ -89,18 +89,17 @@ class AudioRIRDataset(Dataset):
+                  n_views: int = 1,
+                  split: str = "train",
+                  n_fft: int = 400,
+-                 config_path: str = "config.yaml",
++                 share_rir: bool = True,
+                  batch_size : int | None = None,
++                 stats_path: str = "/home/takamichi-lab-pc09/DELSA/RIR_dataset/stats.pt",
+                  hop: int =100):
+         super().__init__()
+         # ── 設定ロード ──
+-        cfg = yaml.safe_load(Path(config_path).read_text())
+-        dcfg = cfg["data"]
+-        self.share_rir = dcfg.get("share_rir_across_batch", False)
++
++        self.share_rir = share_rir
+         self.batch_size = batch_size
+         self._emmited = 0 # なんサンプルか返したか
+         self._batch_rir = None # 現バッチ用RIRをキャッシュする
+-        self.n_views   = dcfg.get("n_views", 1)
+         self.base_dir = Path(base_dir)
+         self.split = split
+         self.n_views = n_views
+@@ -122,6 +121,15 @@ class AudioRIRDataset(Dataset):
+ 
+         # RIR ごとのメタ dict
+         self.rir_meta  = {row["rir_path"]: row.to_dict() for _, row in rir_df.iterrows()}
++        
++        #物理量を正規化するためののコード
++        stats = torch.load(stats_path)
++        self.area_mean = stats["area_m2"]["mean"]
++        self.area_std  = stats["area_m2"]["std"]
++        self.dist_mean = stats["distance"]["mean"]
++        self.dist_std  = stats["distance"]["std"]
++        self.t30_mean  = stats["fullband_T30_ms"]["mean"]
++        self.t30_std   = stats["fullband_T30_ms"]["std"]
+ 
+ 
+     def __len__(self):
+@@ -188,7 +196,17 @@ class AudioRIRDataset(Dataset):
+             wet = self._apply_rir(dry, rir_path) #[4, T10]   
+             #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
+              #ToDo済: captionも空間拡張する(ルールべースの書き換え)
+-            meta = self.rir_meta[rir_path]
++            meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
++            meta["area_m2_norm"]  = (meta["area_m2"]           - self.area_mean) / self.area_std
++            meta["distance_norm"] = (meta["source_distance_m"] - self.dist_mean) / self.dist_std
++            meta["t30_norm"]      = (meta["fullband_T30_ms"]   - self.t30_mean)  / self.t30_std
++            azimuth = meta["azimuth_deg"]
++            elevation = meta["elevation_deg"]
++            direction_vec = torch.tensor(
++                [np.deg2rad(azimuth), np.deg2rad(elevation)],
++                dtype=torch.float32
++            )
++            meta["direction_vec"] = direction_vec
+             caption_spatial = rewrite_caption(caption, meta)
+             omni_48k = wet[0]  # [T10]
+             
+@@ -219,7 +237,7 @@ def collate_fn(batch):
+         text_list  += sample["texts"]
+         src_list.append(sample["source_id"])
+         spa_list.append(sample["space_id"])
+-        rir_meta_list.append(sample["rir_meta"])
++        rir_meta_list += sample["rir_meta"]
+ 
+     # 辞書の中身 (i_act etc.) はテンソルなのでそのままリストで扱い
+     return {
+diff --git a/foa.wav b/foa.wav
+index 3aec683..1ee0238 100644
+Binary files a/foa.wav and b/foa.wav differ
+diff --git a/model/__pycache__/delsa_model.cpython-312.pyc b/model/__pycache__/delsa_model.cpython-312.pyc
+index e061ae7..9c9ddf6 100644
+Binary files a/model/__pycache__/delsa_model.cpython-312.pyc and b/model/__pycache__/delsa_model.cpython-312.pyc differ
+diff --git a/train.py b/train.py
+index d87f8a7..5b8ae82 100644
+--- a/train.py
++++ b/train.py
+@@ -1,10 +1,16 @@
+ #!/usr/bin/env python3
+ # train_sup.py  ― supervised contrastive (source / space) 版
+-import argparse, torch, torch.nn.functional as F
++import torch 
++import torch.nn.functional as F
+ from torch.utils.data import DataLoader
+ from pathlib import Path
+ import random
+ import wandb
++import math
++import sys
++import yaml
++
++
+ 
+ 
+ # 容積の分類のloss
+@@ -14,150 +20,359 @@ import wandb
+     # 音源の分類は　spatialの埋め込みからはできないようにする。
+ 
+ # 3週間くらいで結果揃える
++# ToDo: 正規化をする. 
++
+ 
+ random.seed(42)  # 再現性のため
+ 
+ 
+ #ToDO:Supervised Contrasive Learningを読む。https://proceedings.neurips.cc/paper_files/paper/2020/file/d89a66c7c80a29b1bdbab0f2a1a94af8-Paper.pdf?utm_source=chatgpt.com
+ # ────────────────────────── CLI ──────────────────────────
+-def parse():
+-    ap = argparse.ArgumentParser()
+-    ap.add_argument("--audio_csv", required=True)
+-    ap.add_argument("--rir_csv",   required=True)
+-    ap.add_argument("--audio_base",required=True)
+-    ap.add_argument("--split", default="train")
+-    ap.add_argument("--batch_size",type=int, default=8)
+-    ap.add_argument("--n_views",   type=int, default=2)
+-    ap.add_argument("--epochs",    type=int, default=5)
+-    ap.add_argument("--lr",        type=float, default=1e-4)
+-    ap.add_argument("--device",    default="cuda" if torch.cuda.is_available() else "cpu")
+-    ap.add_argument("--wandb", action="store_true")
+-    ap.add_argument("--proj", default="delsa-sup-contrast", help="wandb project name")
+-    ap.add_argument("--run_name", default=None, help="wandb run name")
+-    return ap.parse_args()
+ 
++def _select_device(raw: str |None) -> str:
++    if raw is None or raw.lower() == "auto":
++        return "cuda" if torch.cuda.is_available() else "cpu"
++    return raw
+ 
++def load_config(path: str | None = None) -> dict:
++    """Load hyper‑parameters from a YAML file and fill in sane defaults."""
+ 
++    # 1️⃣  determine YAML path (CLI arg 1 or default "config.yaml")
++    if path is None:
++        if len(sys.argv) > 1 and sys.argv[1].endswith((".yml", ".yaml")):
++            path = sys.argv[1]
++        else:
++            path = "config.yaml"
+ 
++    # 2️⃣  read YAML
++    try:
++        with open(path, "r", encoding="utf‑8") as f:
++            cfg = yaml.safe_load(f) or {}
++    except FileNotFoundError as e:
++        raise SystemExit(f"[ERR] YAML not found: {path}") from e
+ 
++    # 3️⃣  defaults
++    defaults = {
++        "split": "train",
++        "batch_size": 8,
++        "n_views": 4,
++        "epochs": 5,
++        "lr": 0.0001,
++        "device": "auto",
++        "wandb": True,
++        "proj": "delsa-sup-contrast",
++        "run_name": None,
++    }
++    for k, v in defaults.items():
++        cfg.setdefault(k, v)
+ 
++    # 4️⃣  post‑process
++    cfg["device"] = _select_device(cfg["device"])
++    return cfg
+ 
+ 
+-# ───────── sSupervised cross-modal contrastive los ─────────
+-# ToDo;sup_contrastの公式実装見る：https://github.com/HobbitLong/SupContrast?utm_source=chatgpt.com
+-def sup_contrast(a, b, labels, logit_scale, eps=1e-8):
++
++
++
++# ───────── Supervised cross-modal contrastive los ─────────
++
++def sup_contrast(
++    a: torch.Tensor,
++    b: torch.Tensor,
++    labels: torch.Tensor,
++    logit_scale: torch.Tensor,
++    eps: float = 1e-8,
++    *,
++    symmetric: bool = True,      # True: Text↔Audio 両方向を平均
++    exclude_diag: bool = False   # True: 分母から自己相似を除外 (SCL 型)
++) -> torch.Tensor:
++    """
++    Cross‑modal Supervised Contrastive Loss (InfoNCE‑style).
++
++    Parameters
++    ----------
++    a, b        : [B, D]  L2‑normalized以外は何でも可。内部で normalize する。
++    labels      : [B]     同じ値を持つサンプルを正例集合とみなす。
++    logit_scale : ()      log(temperature^{-1})。CLIP と同じ扱い。
++    eps         : float   分母のゼロ除避け。
++    symmetric   : bool    True  -> (Text→Audio + Audio→Text)/2
++    exclude_diag: bool    True  -> 自己相似を分母から除外 (SCL 推奨)
++
++    Returns
++    -------
++    loss : torch.Tensor  scalar
++    """
++
++    # 1. L2‑normalize
+     a = F.normalize(a, dim=1)
+     b = F.normalize(b, dim=1)
+ 
+-    logits = torch.matmul(a, b.T) * logit_scale.exp()      # S_ij
+-    B = logits.size(0)
++    # 2. temperature (clamp to avoid overflow)
++    scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
++
++    # 3. logits  (Text→Audio)
++    logits_t2a = torch.matmul(a, b.T) * scale           # [B, B]
++
++    # optional: Audio→Text (reuse transpose for efficiency)
++    logits_a2t = logits_t2a.T if symmetric else None
+ 
+-    # 正例マスク (同ラベル & 対角除外)
+-    with torch.no_grad():
+-        pos_mask = labels[:, None].eq(labels[None, :]).fill_diagonal_(False)
+-        valid = pos_mask.any(1)                            # 正例ゼロ行を除外
++    def _directional_loss(logits: torch.Tensor) -> torch.Tensor:
++        B = logits.size(0)
+ 
+-    # log-sum-exp 安定化
+-    max_sim, _ = logits.max(dim=1, keepdim=True)
+-    exp_sim = torch.exp(logits - max_sim) * (~torch.eye(B, dtype=bool, device=a.device))
+-    denom = exp_sim.sum(1, keepdim=True) + eps            # Z_i
++        # --- positive mask ---
++        pos_mask = labels[:, None].eq(labels[None, :])          # [B, B] bool
+ 
+-    log_prob = logits - max_sim - denom.log()             # log p_ij
+-    mean_log_pos = (log_prob * pos_mask).sum(1) / pos_mask.sum(1).clamp(min=1)
++        # --- numerical stability (detach!) ---
++        max_sim, _ = logits.max(dim=1, keepdim=True)
++        logits_stable = logits - max_sim.detach()               # stop‑grad on max
+ 
+-    loss = -mean_log_pos[valid].mean()
+-    return loss
++        # --- denominator ---
++        if exclude_diag:
++            diag_mask = torch.eye(B, dtype=torch.bool, device=logits.device)
++        else:
++            diag_mask = torch.zeros(B, B, dtype=torch.bool, device=logits.device)
+ 
++        exp_sim = torch.exp(logits_stable) * (~diag_mask)
++        denom = exp_sim.sum(dim=1, keepdim=True) + eps
++
++        # --- log‑probabilities ---
++        log_prob = logits_stable - denom.log()
++        mean_log_pos = (log_prob * pos_mask.float()).sum(dim=1) / pos_mask.sum(dim=1).clamp(min=1)
++
++        # --- drop rows with no positives ---
++        valid = pos_mask.any(dim=1)
++        return -mean_log_pos[valid].mean()
++
++    loss_t2a = _directional_loss(logits_t2a)
++    if symmetric:
++        loss_a2t = _directional_loss(logits_a2t)
++        return 0.5 * (loss_t2a + loss_a2t)
++    else:
++        return loss_t2a
++# ToDo;sup_contrastの公式実装見る：https://github.com/HobbitLong/SupContrast?utm_source=chatgpt.com
++
++
++# ── 物理量の予測損失 ──
++def physical_loss(model_output, batch_data,isNorm=True ,dataloader=None) -> torch.Tensor:
++    """
++    物理量の予測損失を計算する。
++    pred_physics: {
++        "direction": [B, 2]  # azimuth, elevation
++        "area": [B, 1]
++        "distance": [B, 1]
++        "reverb": [B, 1] """
++    if isNorm:
++        pred_physics = {
++            "direction": model_output["direction"],  
++            "area": model_output["area"],
++            "distance": model_output["distance"],
++            "reverb": model_output["reverb"]}  
++   
++        true_physics = {
++            "direction": batch_data["rir_meta"]["direction_vec"],  
++            "area": batch_data["rir_meta"]["area_m2_norm"],
++            "distance": batch_data["rir_meta"]["distance_norm"],
++            "reverb": batch_data["rir_meta"]["t30_norm"]} 
++        
++    else: #生の値で評価するとき
++        area_mean, area_std = dataloader.dataset.area_mean, dataloader.dataset.area_std
++        distance_mean, distance_std = dataloader.dataset.dist_mean, dataloader.dataset.dist_std
++        t30_mean, t30_std = dataloader.dataset.t30_mean, dataloader.dataset.t30_std
++        pred_physics = {
++            "direction": model_output["direction"],  
++            "area": model_output["area"] * area_std + area_mean,
++            "distance": model_output["distance"] * distance_std + distance_mean,
++            "reverb": model_output["reverb"] * t30_std + t30_mean
++        }
++        true_physics = {
++            "direction": batch_data["rir_meta"]["direction_vec"],
++            "area": batch_data["rir_meta"]["area_m2"],
++            "distance": batch_data["rir_meta"]["distance"],
++            "reverb": batch_data["rir_meta"]["fullband_T30_ms"]}    
++        
++    # 方向の損失は、cosine similarityを使う。
++    loss_dir = (-1* F.cosine_similarity(pred_physics["direction"], true_physics["direction"], dim=1)).mean()
++
++    #mse 自体がえ平均をとるので、平均をとる必要はない。
++    loss_area = F.mse_loss(pred_physics["area"], true_physics["area"])
++    loss_distance= F.mse_loss(pred_physics["distance"], true_physics["distance"])
++    loss_reverb = F.mse_loss(pred_physics["reverb"], true_physics["reverb"])
++
++    total_physical_loss = loss_dir + loss_area + loss_distance + loss_reverb
++    physical_losses = {
++        "total_loss": total_physical_loss, "loss_dir": loss_dir.item(),
++        "loss_distance": loss_distance.item(), "loss_area": loss_area.item(), "loss_reverb": loss_reverb.item()
++
++    }
++    return physical_losses, total_physical_loss
++    
++def recursive_to(obj, device):
++    """Tensor だけを再帰的に device へ送る"""
++    if isinstance(obj, torch.Tensor):
++        return obj.to(device)
++    if isinstance(obj, dict):
++        return {k: recursive_to(v, device) for k, v in obj.items()}
++    if isinstance(obj, list):
++        return [recursive_to(v, device) for v in obj]
++    return obj          # int / float / str など
+ # ─────────────────────────── Main ─────────────────────────
+ def main():
+-    args = parse()
++    cfg = load_config()  # config.yaml を読み込む
+     from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn
+-    if args.wandb:
+-        wandb.init(project=args.proj,
+-                   name = args.run_name,
+-                   config = vars(args),
++    if cfg["wandb"]:
++        wandb.init(project=cfg["proj"],
++                   name = cfg["run_name"],
++                   config = cfg, save_code =True,
+                    mode="online")
+-    ds = AudioRIRDataset(
+-        csv_audio=args.audio_csv,
+-        base_dir=args.audio_base,
+-        csv_rir=args.rir_csv,
+-        n_views=args.n_views,
+-        config_path= "config.yaml",
+-        split=args.split,
+-        batch_size = args.batch_size
++    train_ds = AudioRIRDataset(
++        csv_audio=cfg["audio_csv_train"],
++        base_dir=cfg["audio_base"],
++        csv_rir=cfg["rir_csv_train"],
++        n_views=cfg["n_views"],
++        split=cfg["split"],
++        batch_size=cfg["batch_size"]
+     )
+-    dl = DataLoader(ds, batch_size=args.batch_size,
++    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"],
+                     shuffle=True, num_workers=4,
+                     collate_fn=collate_fn, pin_memory=False)
+-
++    
++    # val 用  ★追加★
++    val_ds = AudioRIRDataset(
++        csv_audio=cfg["audio_csv_val"], base_dir=cfg["audio_base"],
++        csv_rir=cfg["rir_csv_val"], split="val",             # ここだけ split=val
++        n_views=cfg["n_views"],
++        batch_size=cfg["batch_size"])
++    val_dl = DataLoader(val_ds,  batch_size=cfg["batch_size"],
++                        shuffle=False, num_workers=4,
++                        collate_fn=collate_fn, pin_memory=False)
+     from model.delsa_model import DELSA      # アップロード済みモデル
+-    model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(args.device)
+-    opt   = torch.optim.AdamW(model.parameters(), lr=args.lr)
++    model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
++    opt   = torch.optim.AdamW(model.parameters(), lr=cfg["lr"])
+ 
+-    for ep in range(1, args.epochs+1):
++    for ep in range(1, cfg["epochs"]+1):
+         model.train()
+-        for step, batch in enumerate(dl, 1):
++        for step, batch in enumerate(train_dl, 1):
++            if batch is None:
++                continue
++            # ── データをデバイスに転送 ──
++            #batch_data = {k: v.to(cfg["device"]) for k, v in batch.items() if k not in ["audio", "texts"]}
++            batch_data = {k: recursive_to(v, cfg["device"])
++              for k, v in batch.items() if k not in ["audio","texts"]}
+             # ----------- flatten ------------
+-            audio_dict = {k: torch.stack([d[k] for d in batch["audio"]]).to(args.device)
+-                          for k in ("i_act","i_rea","omni_48k")}
++
++            audio_dict = {k: torch.stack([d[k] for d in batch["audio"]]).to(cfg["device"])
++              for k in ("i_act","i_rea","omni_48k")}
+             texts  = batch["texts"]
+-            src_lb = batch["source_id"].reshape(-1).to(args.device)  # [B']
+-         
+-            spa_lb = batch["space_id"].reshape(-1).to(args.device)
+-            print(spa_lb)
++            #print(texts)
++            src_lb = batch["source_id"].reshape(-1).to(cfg["device"])  # [B']
++            meta = batch["rir_meta"]  # RIRメタデータ
++            #print(meta)
++            spa_lb = batch["space_id"].reshape(-1).to(cfg["device"])
++            #print(spa_lb)
+             # ----------- forward ------------
+-            out = model(audio_dict, texts)   # expect 4 embeddings + logit_scale
++            model_out = model(audio_dict, texts)   # expect 4 embeddings + logit_scale
+ 
+-            a_s  = F.normalize(out["audio_space_emb"],  dim=-1)
+-            t_s  = F.normalize(out["text_space_emb"],   dim=-1)
+-            a_src= F.normalize(out["audio_source_emb"], dim=-1)
+-            t_src= F.normalize(out["text_source_emb"],  dim=-1)
++            a_s  = F.normalize(model_out["audio_space_emb"],  dim=-1)
++            t_s  = F.normalize(model_out["text_space_emb"],   dim=-1)
++            a_src= F.normalize(model_out["audio_source_emb"], dim=-1)
++            t_src= F.normalize(model_out["text_source_emb"],  dim=-1)
+ 
+-            pred_physics = {
+-                "direction": out["direction"],  
+-                "area": out["area"],
+-                "distance": out["distance"],
+-                "reverb": out["reverb"]
+-            }     
+ 
+-            T = out["logit_scale"].exp()     # 温度
++
++            T = model_out["logit_scale"].exp()     # 温度
+             loss_space  = sup_contrast(a_s,  t_s,  spa_lb, T)
+             loss_source = sup_contrast(a_src,t_src,src_lb, T)
+-            # 物理量の予測損失 　今下書きだから、直す
+-            # loss_physics = 0.0
+-            # for key, pred in pred_physics.items():
+-            #     if key == "direction":
+-            #         target = batch["rir_meta"]["azimuth_deg"].to(args.device) and batch["rir_meta"]["elevation_deg"].to(args.device)
+-            #         loss_physics += F.mse_loss(pred, target)
+-            #     elif key == "area":
+-            #         target = batch["rir_meta"]["area_m2"].to(args.device)
+-            #         loss_physics += F.mse_loss(pred, target)
+-            #     elif key == "distance":                     
+-            #         target = batch["rir_meta"]["source_distance_m"].to(args.device)
+-            #         loss_physics += F.mse_loss(pred, target)
+-            #     elif key == "reverb":       
+-            #         target = batch["rir_meta"]["fullband_T30_ms"].to(args.device)
+-            #         loss_physics += F.mse_loss(pred, target)
+-            #     else:
+-            #         raise ValueError(f"Unknown key: {key}") 
+-            loss = 0.5 * (loss_space + loss_source)
++
++            physical_losses, total_physical_loss = physical_loss(model_out, batch_data, isNorm=True, dataloader=train_dl)
++
++            loss = (loss_space + loss_source + total_physical_loss)
+ 
+             opt.zero_grad()
+             loss.backward()
+             opt.step()
+ 
+             if step % 10 == 0:
+-                print(f"Epoch {ep} Step {step}/{len(dl)}  "
++                print(f"Epoch {ep} Step {step}/{len(train_dl)}  "
+                       f"space={loss_space:.4f}  src={loss_source:.4f}")
+-                if args.wandb:
++                if cfg["wandb"]:
+                     wandb.log({
+                         "loss/space": loss_space.item(),
+                         "loss/source": loss_source.item(),
++                        "loss/physical": total_physical_loss.item(),
++                        "loss/dir": physical_losses["loss_dir"],
++                        "loss/distance": physical_losses["loss_distance"],
++                        "loss/area": physical_losses["loss_area"],  
++                        "loss/reverb": physical_losses["loss_reverb"],
++                        "logit_scale": model_out["logit_scale"].item(),
+                         "loss/mean": loss.item(),
+                         "epoch": ep,
+-                        "step": step + (ep-1)*len(dl)
++                        "step": step + (ep-1)*len(train_dl)
+                     })
++        # ---------- Validation ----------  ★追加ブロック★
++        model.eval()
++        val_metrics = {"space": 0.0, "source": 0.0,
++                    "physical": 0.0, "count": 0}
++        with torch.no_grad():
++            for batch in val_dl:
++                if batch is None:  # collate_fn が None を返すケース対策
++                    continue
++                # --- デバイス転送／forward は train ループと同じ ---
++                batch_data = {k: v.to(args.device) for k, v in batch.items()
++                            if k not in ["audio","texts"]}
++                audio_dict = {k: torch.stack([d[k] for d in batch["audio"]]).to(args.device)
++                            for k in ("i_act","i_rea","omni_48k")}
++                texts  = batch["texts"]
++                src_lb = batch["source_id"].reshape(-1).to(args.device)
++                spa_lb = batch["space_id"].reshape(-1).to(args.device)
++
++                model_out = model(audio_dict, texts)
++
++                a_s  = F.normalize(model_out["audio_space_emb"],  dim=-1)
++                t_s  = F.normalize(model_out["text_space_emb"],   dim=-1)
++                a_src= F.normalize(model_out["audio_source_emb"], dim=-1)
++                t_src= F.normalize(model_out["text_source_emb"],  dim=-1)
++                T = model_out["logit_scale"].exp()
++
++                loss_space  = sup_contrast(a_s,  t_s,  spa_lb, T)
++                loss_source = sup_contrast(a_src,t_src,src_lb, T)
++                physical_losses, total_physical_loss = physical_loss(model_out, batch_data, isNorm=False, dataloader=val_dl)
+ 
++                val_metrics["space"]    += loss_space.item()
++                val_metrics["source"]   += loss_source.item()
++                val_metrics["physical"] += total_physical_loss.item()
++                val_metrics["direction"] += physical_losses["loss_dir"].item()
++                val_metrics["distance"] += physical_losses["loss_distance"].item()
++                val_metrics["area"]     += physical_losses["loss_area"].item()
++                val_metrics["reverb"]   += physical_losses["loss_reverb"].item()
++                val_metrics["count"]    += 1
++
++        # ---- 平均を計算 ----
++        n = val_metrics["count"]
++        val_space    = val_metrics["space"]    / n
++        val_source   = val_metrics["source"]   / n
++        val_phys     = val_metrics["physical"] / n
++        val_direction = val_metrics["direction"] / n
++        val_distance = val_metrics["distance"] / n
++        val_area     = val_metrics["area"]     / n
++        val_reverb   = val_metrics["reverb"]   / n
++        val_mean     = (val_space + val_source + val_phys)
++
++        print(f"Epoch {ep}  [VAL] space={val_space:.4f} "
++            f"src={val_source:.4f} phys={val_phys:.4f}")
++
++        if cfg["wandb"]:
++            wandb.log({
++                "val/loss_space":    val_space,
++                "val/loss_source":   val_source,
++                "val/loss_physical": val_phys,
++                "val/loss_direction": val_direction,
++                "val/loss_distance": val_distance,
++                "val/loss_area":     val_area,  
++                "val/loss_reverb":   val_reverb,
++                "logit_scale":       model_out["logit_scale"].item(),
++                "val/loss_mean":     val_mean,
++                "epoch": ep
++            })
+ 
+         # -------- checkpoint -------------
+         ckpt_dir = Path("checkpoints"); ckpt_dir.mkdir(exist_ok=True)
+@@ -167,6 +382,7 @@ def main():
+                    ckpt_dir/f"ckpt_sup_ep{ep}.pt")
+         print(f"[✓] Saved checkpoint for epoch {ep}")
+ 
++
+ if __name__ == "__main__":
+     try:
+         main()
+diff --git a/wandb/debug-internal.log b/wandb/debug-internal.log
+index 7138c31..0fd3813 120000
+--- a/wandb/debug-internal.log
++++ b/wandb/debug-internal.log
+@@ -1 +1 @@
+-run-20250723_171831-yzyqo08z/logs/debug-internal.log
+\ No newline at end of file
++run-20250805_144546-5h2w4aa8/logs/debug-internal.log
+\ No newline at end of file
+diff --git a/wandb/debug.log b/wandb/debug.log
+index 7ec3528..c08f216 120000
+--- a/wandb/debug.log
++++ b/wandb/debug.log
+@@ -1 +1 @@
+-run-20250723_171831-yzyqo08z/logs/debug.log
+\ No newline at end of file
++run-20250805_144546-5h2w4aa8/logs/debug.log
+\ No newline at end of file
+diff --git a/wandb/latest-run b/wandb/latest-run
+index 36000f8..4559aca 120000
+--- a/wandb/latest-run
++++ b/wandb/latest-run
+@@ -1 +1 @@
+-run-20250723_171831-yzyqo08z
+\ No newline at end of file
++run-20250805_144546-5h2w4aa8
+\ No newline at end of file
