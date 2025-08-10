@@ -1,0 +1,17 @@
+dims:
+- 8.166
+- 4.931
+- 3.0
+area_m2: 40.27
+alpha: 0.117
+fullband_T30_ms: 1044.3
+source_distance_m: 0.9
+azimuth_deg: 156
+elevation_deg: 42
+source_pos_xyz:
+- 3.472
+- 2.738
+- 2.102
+fs: 48000
+room_id: b813dc28
+split: val

@@ -7,6 +7,8 @@ from .shared_text_encoder import TextEncoder
 import numpy as np
 from .RegressionHead import RegressionHead_for_physicalValue
 
+
+
 class DELSA(nn.Module):
     """
     論文のアーキテクチャ全体を統合したELSAモデル。

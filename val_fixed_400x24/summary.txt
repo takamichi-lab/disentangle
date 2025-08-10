@@ -1,0 +1,3 @@
+Audio total: 2475; fixed: 400
+RIR total: 96; fixed: 24
+Pairs fixed: 9600

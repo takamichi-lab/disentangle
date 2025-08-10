@@ -1,0 +1,17 @@
+dims:
+- 24.122
+- 10.37
+- 3.0
+area_m2: 250.15
+alpha: 0.0756
+fullband_T30_ms: 2259.9
+source_distance_m: 0.58
+azimuth_deg: -164
+elevation_deg: -47
+source_pos_xyz:
+- 11.681
+- 5.076
+- 1.076
+fs: 48000
+room_id: ee1523cf
+split: val

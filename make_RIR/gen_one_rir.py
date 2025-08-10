@@ -168,5 +168,5 @@ def gen_one_rir(
     meta_path.write_text(yaml.dump(meta, sort_keys=False, allow_unicode=True))
     print(f"RIR {id} generated: {wav_path} and {meta_path}")
 
-    
+    return meta_path   
 

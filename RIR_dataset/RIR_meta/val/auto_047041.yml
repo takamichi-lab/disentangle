@@ -1,0 +1,17 @@
+dims:
+- 6.806
+- 5.003
+- 3.0
+area_m2: 34.05
+alpha: 0.0684
+fullband_T30_ms: 1731.1
+source_distance_m: 2.04
+azimuth_deg: 10
+elevation_deg: 43
+source_pos_xyz:
+- 4.872
+- 2.761
+- 2.891
+fs: 48000
+room_id: a8ac8bab
+split: val

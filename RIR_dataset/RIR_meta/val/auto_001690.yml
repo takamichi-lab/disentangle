@@ -1,0 +1,17 @@
+dims:
+- 9.22
+- 4.155
+- 3.0
+area_m2: 38.31
+alpha: 0.0608
+fullband_T30_ms: 1939.9
+source_distance_m: 0.55
+azimuth_deg: -59
+elevation_deg: 48
+source_pos_xyz:
+- 4.8
+- 1.762
+- 1.909
+fs: 48000
+room_id: dfe19c24
+split: val
