@@ -1,0 +1,68 @@
+Some weights of RobertaModel were not initialized from the model checkpoint at roberta-base and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Epoch 1 Step 10/5652  space=3.7007  src=3.6930
+Epoch 1 Step 20/5652  space=3.6775  src=3.6879
+Epoch 1 Step 30/5652  space=3.5522  src=3.6930
+Epoch 1 Step 40/5652  space=3.6755  src=3.6939
+Epoch 1 Step 50/5652  space=3.9450  src=3.6944
+Epoch 1 Step 60/5652  space=3.4592  src=3.7172
+Epoch 1 Step 70/5652  space=3.8639  src=3.6905
+Epoch 1 Step 80/5652  space=3.6327  src=3.6930
+Epoch 1 Step 90/5652  space=3.5933  src=3.6903
+Epoch 1 Step 100/5652  space=3.2747  src=3.6921
+Epoch 1 Step 110/5652  space=3.8112  src=3.6911
+Epoch 1 Step 120/5652  space=3.7590  src=3.6900
+Epoch 1 Step 130/5652  space=3.4613  src=3.6919
+Epoch 1 Step 140/5652  space=3.6274  src=3.6911
+Epoch 1 Step 150/5652  space=3.5581  src=3.6902
+Epoch 1 Step 160/5652  space=3.4616  src=3.6904
+Epoch 1 Step 170/5652  space=3.2713  src=3.6906
+Epoch 1 Step 180/5652  space=3.4549  src=3.6918
+Epoch 1 Step 190/5652  space=3.5276  src=3.6910
+Epoch 1 Step 200/5652  space=3.5800  src=3.6901
+Epoch 1 Step 210/5652  space=3.6319  src=3.6899
+Epoch 1 Step 220/5652  space=3.2897  src=3.6895
+Epoch 1 Step 230/5652  space=3.1824  src=3.6962
+Epoch 1 Step 240/5652  space=3.3777  src=3.7079
+Epoch 1 Step 250/5652  space=3.5864  src=3.6929
+Epoch 1 Step 260/5652  space=3.4607  src=3.6928
+Epoch 1 Step 270/5652  space=3.3506  src=3.6945
+Epoch 1 Step 280/5652  space=3.7461  src=3.6922
+Epoch 1 Step 290/5652  space=3.1949  src=3.6911
+Epoch 1 Step 300/5652  space=3.6826  src=3.6896
+Epoch 1 Step 310/5652  space=3.4267  src=3.6907
+Epoch 1 Step 320/5652  space=3.3506  src=3.6898
+Epoch 1 Step 330/5652  space=3.3878  src=3.6896
+Epoch 1 Step 340/5652  space=3.5621  src=3.6895
+Epoch 1 Step 350/5652  space=3.9453  src=3.6903
+Epoch 1 Step 360/5652  space=3.4444  src=3.6887
+Epoch 1 Step 370/5652  space=3.1446  src=3.6897
+Epoch 1 Step 380/5652  space=3.5313  src=3.6900
+Epoch 1 Step 390/5652  space=3.6290  src=3.6900
+Epoch 1 Step 400/5652  space=3.4796  src=3.6903
+Epoch 1 Step 410/5652  space=3.5103  src=3.6902
+Epoch 1 Step 420/5652  space=3.4150  src=3.6903
+Epoch 1 Step 430/5652  space=3.2288  src=3.6919
+Epoch 1 Step 440/5652  space=3.5091  src=3.6892
+Epoch 1 Step 450/5652  space=3.4579  src=3.6885
+Epoch 1 Step 460/5652  space=3.7023  src=3.6893
+Epoch 1 Step 470/5652  space=3.6985  src=3.6903
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x798fe91b9b20>
+Traceback (most recent call last):
+  File "/home/takamichi-lab-pc09/DELSA/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1663, in __del__
+    self._shutdown_workers()
+  File "/home/takamichi-lab-pc09/DELSA/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1627, in _shutdown_workers
+    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 149, in join
+    res = self._popen.wait(timeout)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/multiprocessing/popen_fork.py", line 40, in wait
+    if not wait([self.sentinel], timeout):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/multiprocessing/connection.py", line 1136, in wait
+    ready = selector.select(timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt:

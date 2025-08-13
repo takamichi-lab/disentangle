@@ -1,0 +1,137 @@
+Some weights of RobertaModel were not initialized from the model checkpoint at roberta-base and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Epoch 1 Step 10/5652  space=3.6979  src=3.6956
+Epoch 1 Step 20/5652  space=3.7016  src=3.6924
+Epoch 1 Step 30/5652  space=3.7268  src=3.6904
+Epoch 1 Step 40/5652  space=3.7014  src=3.6913
+Epoch 1 Step 50/5652  space=3.6717  src=3.6994
+Epoch 1 Step 60/5652  space=3.7413  src=3.6922
+Epoch 1 Step 70/5652  space=3.6671  src=3.7106
+Epoch 1 Step 80/5652  space=3.7058  src=3.7141
+Epoch 1 Step 90/5652  space=3.5240  src=3.6990
+Epoch 1 Step 100/5652  space=3.8418  src=3.6947
+Epoch 1 Step 110/5652  space=3.3120  src=3.6971
+Epoch 1 Step 120/5652  space=3.9068  src=3.6921
+Epoch 1 Step 130/5652  space=3.4259  src=3.6898
+Epoch 1 Step 140/5652  space=3.5737  src=3.6901
+Epoch 1 Step 150/5652  space=3.4926  src=3.6912
+Epoch 1 Step 160/5652  space=3.7067  src=3.6889
+Epoch 1 Step 170/5652  space=3.6158  src=3.6890
+Epoch 1 Step 180/5652  space=3.6277  src=3.6902
+Epoch 1 Step 190/5652  space=3.7148  src=3.6890
+Epoch 1 Step 200/5652  space=3.7045  src=3.6891
+Epoch 1 Step 210/5652  space=3.7050  src=3.6874
+Epoch 1 Step 220/5652  space=3.6880  src=3.6892
+Epoch 1 Step 230/5652  space=3.6921  src=3.6902
+Epoch 1 Step 240/5652  space=3.6934  src=3.6888
+Epoch 1 Step 250/5652  space=3.6881  src=3.6946
+Epoch 1 Step 260/5652  space=3.6893  src=3.6884
+Epoch 1 Step 270/5652  space=3.6874  src=3.6898
+Epoch 1 Step 280/5652  space=3.6910  src=3.6964
+Epoch 1 Step 290/5652  space=3.6867  src=3.7442
+Epoch 1 Step 300/5652  space=3.6933  src=3.7038
+Epoch 1 Step 310/5652  space=3.6923  src=3.6906
+Epoch 1 Step 320/5652  space=3.6928  src=3.6949
+Epoch 1 Step 330/5652  space=3.6908  src=3.7059
+Epoch 1 Step 340/5652  space=3.6858  src=3.7007
+Epoch 1 Step 350/5652  space=3.6900  src=3.7096
+Epoch 1 Step 360/5652  space=3.6860  src=3.6925
+Epoch 1 Step 370/5652  space=3.6923  src=3.6986
+Epoch 1 Step 380/5652  space=3.6851  src=3.6925
+Epoch 1 Step 390/5652  space=3.6885  src=3.6908
+Epoch 1 Step 400/5652  space=3.6875  src=3.6894
+Epoch 1 Step 410/5652  space=3.6920  src=3.6899
+Epoch 1 Step 420/5652  space=3.6910  src=3.6887
+Epoch 1 Step 430/5652  space=3.6833  src=3.6890
+Epoch 1 Step 440/5652  space=3.6824  src=3.6891
+Epoch 1 Step 450/5652  space=3.6854  src=3.6886
+Epoch 1 Step 460/5652  space=3.6945  src=3.6897
+Epoch 1 Step 470/5652  space=3.6854  src=3.6903
+Epoch 1 Step 480/5652  space=3.6813  src=3.6894
+Epoch 1 Step 490/5652  space=3.6777  src=3.6897
+Epoch 1 Step 500/5652  space=3.7114  src=3.6889
+Epoch 1 Step 510/5652  space=3.7053  src=3.6886
+Epoch 1 Step 520/5652  space=3.6806  src=3.6889
+Epoch 1 Step 530/5652  space=3.6872  src=3.6897
+Epoch 1 Step 540/5652  space=3.6888  src=3.6895
+Epoch 1 Step 550/5652  space=3.6960  src=3.6893
+Epoch 1 Step 560/5652  space=3.7025  src=3.6891
+Epoch 1 Step 570/5652  space=3.6880  src=3.6909
+Epoch 1 Step 580/5652  space=3.6886  src=3.6893
+Epoch 1 Step 590/5652  space=3.6926  src=3.6895
+Epoch 1 Step 600/5652  space=3.6788  src=3.6899
+Epoch 1 Step 610/5652  space=3.6950  src=3.6892
+Epoch 1 Step 620/5652  space=3.6915  src=3.6911
+Epoch 1 Step 630/5652  space=3.6991  src=3.6907
+Epoch 1 Step 640/5652  space=3.6953  src=3.6909
+Epoch 1 Step 650/5652  space=3.6845  src=3.6894
+Epoch 1 Step 660/5652  space=3.6825  src=3.6912
+Epoch 1 Step 670/5652  space=3.6935  src=3.6954
+Epoch 1 Step 680/5652  space=3.6921  src=3.6924
+Epoch 1 Step 690/5652  space=3.6936  src=3.6923
+Epoch 1 Step 700/5652  space=3.6852  src=3.6905
+Epoch 1 Step 710/5652  space=3.6885  src=3.6898
+Epoch 1 Step 720/5652  space=3.6822  src=3.6951
+Epoch 1 Step 730/5652  space=3.6902  src=3.6911
+Epoch 1 Step 740/5652  space=3.6816  src=3.6887
+Epoch 1 Step 750/5652  space=3.6863  src=3.6904
+Epoch 1 Step 760/5652  space=3.6921  src=3.6900
+Epoch 1 Step 770/5652  space=3.6870  src=3.6904
+Epoch 1 Step 780/5652  space=3.6930  src=3.6897
+Epoch 1 Step 790/5652  space=3.6910  src=3.6918
+Epoch 1 Step 800/5652  space=3.6897  src=3.6913
+Epoch 1 Step 810/5652  space=3.6896  src=3.6961
+Epoch 1 Step 820/5652  space=3.6879  src=3.6997
+Epoch 1 Step 830/5652  space=3.6895  src=3.7271
+Epoch 1 Step 840/5652  space=3.6867  src=3.6976
+Epoch 1 Step 850/5652  space=3.6874  src=3.6952
+Epoch 1 Step 860/5652  space=3.6898  src=3.6901
+Epoch 1 Step 870/5652  space=3.6910  src=3.6908
+Epoch 1 Step 880/5652  space=3.6893  src=3.6920
+Epoch 1 Step 890/5652  space=3.6807  src=3.6907
+Epoch 1 Step 900/5652  space=3.6892  src=3.6891
+Epoch 1 Step 910/5652  space=3.6909  src=3.6893
+Epoch 1 Step 920/5652  space=3.6884  src=3.6893
+Epoch 1 Step 930/5652  space=3.6951  src=3.6897
+Epoch 1 Step 940/5652  space=3.6854  src=3.6889
+Epoch 1 Step 950/5652  space=3.6851  src=3.6889
+Epoch 1 Step 960/5652  space=3.6865  src=3.6889
+Epoch 1 Step 970/5652  space=3.6853  src=3.6893
+Epoch 1 Step 980/5652  space=3.6885  src=3.6889
+Epoch 1 Step 990/5652  space=3.6996  src=3.6890
+Epoch 1 Step 1000/5652  space=3.6896  src=3.6894
+Epoch 1 Step 1010/5652  space=3.6878  src=3.6886
+Epoch 1 Step 1020/5652  space=3.6926  src=3.6894
+Epoch 1 Step 1030/5652  space=3.6887  src=3.6894
+Epoch 1 Step 1040/5652  space=3.6894  src=3.6888
+Epoch 1 Step 1050/5652  space=3.6900  src=3.6897
+Epoch 1 Step 1060/5652  space=3.6853  src=3.6895
+Epoch 1 Step 1070/5652  space=3.6848  src=3.6880
+Epoch 1 Step 1080/5652  space=3.6932  src=3.6903
+Epoch 1 Step 1090/5652  space=3.6879  src=3.6901
+Epoch 1 Step 1100/5652  space=3.7007  src=3.6891
+Epoch 1 Step 1110/5652  space=3.6913  src=3.6892
+Epoch 1 Step 1120/5652  space=3.6920  src=3.6892
+Epoch 1 Step 1130/5652  space=3.6834  src=3.6886
+Epoch 1 Step 1140/5652  space=3.6830  src=3.6897
+Epoch 1 Step 1150/5652  space=3.6875  src=3.6899
+Epoch 1 Step 1160/5652  space=3.6826  src=3.6897
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7cb6dc7a5620>
+Traceback (most recent call last):
+  File "/home/takamichi-lab-pc09/DELSA/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1663, in __del__
+    self._shutdown_workers()
+  File "/home/takamichi-lab-pc09/DELSA/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1627, in _shutdown_workers
+    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 149, in join
+    res = self._popen.wait(timeout)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/multiprocessing/popen_fork.py", line 40, in wait
+    if not wait([self.sentinel], timeout):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/multiprocessing/connection.py", line 1136, in wait
+    ready = selector.select(timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt:

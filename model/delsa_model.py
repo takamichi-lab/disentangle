@@ -1,4 +1,4 @@
-# file: models/delsa_model.py
+# file: model/delsa_model.py
 
 import torch
 import torch.nn as nn

@@ -7,6 +7,11 @@ from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
 import numpy as np
 import soundfile   as sf
+try:
+    if torchaudio.get_audio_backend() != "sox_io":
+        torchaudio.set_audio_backend("sox_io")
+except Exception:
+    pass
 # ToDo;SALSAの論文の実装に合わせる。0のときの処理を
  #ToDo: A-format to B-format
  # #ToDo: captionも空間拡張する
@@ -92,7 +97,8 @@ class AudioRIRDataset(Dataset):
                  share_rir: bool = True,
                  batch_size : int | None = None,
                  stats_path: str = "/home/takamichi-lab-pc09/DELSA/RIR_dataset/stats.pt",
-                 hop: int =100):
+                 hop: int =100,
+                 bad_log_path: str | None = "bad_mp3_ids.txt"):
         super().__init__()
         # ── 設定ロード ──
 
@@ -121,7 +127,8 @@ class AudioRIRDataset(Dataset):
 
         # RIR ごとのメタ dict
         self.rir_meta  = {row["rir_path"]: row.to_dict() for _, row in rir_df.iterrows()}
-        
+        self._bad_ids = set()
+        self._bad_log_path = Path(bad_log_path) if bad_log_path else None    
         #物理量を正規化するためののコード
         stats = torch.load(stats_path)
         self.area_mean = stats["area_m2"]["mean"]
@@ -134,7 +141,16 @@ class AudioRIRDataset(Dataset):
 
     def __len__(self):
         return len(self.audio_df)
-    
+    def _mark_bad(self, audiocap_id: int, err: Exception):
+        if audiocap_id in self._bad_ids:
+            return
+        self._bad_ids.add(audiocap_id)
+        msg = f"[WARN] skip {audiocap_id}: {err}"
+        print(msg)
+        if self._bad_log_path:
+            with self._bad_log_path.open("a") as f:
+                f.write(f"{audiocap_id}\t{type(err).__name__}\t{err}\n")
+ 
     def _load_dry(self, audiocap_id: int) -> torch.Tensor:
         path = self.base_dir / self.split / f"{audiocap_id}.mp3"
         wav, sr = torchaudio.load(path)
@@ -161,7 +177,7 @@ class AudioRIRDataset(Dataset):
         Z =  (m0 -  m1 -  m2 +  m3)/2
         foa = torch.stack([W, Y, Z, X])
         #print(sr)
-        sf.write('foa.wav', foa.T, sr)
+        #sf.write('foa.wav', foa.T, sr)
         return foa
 
 
@@ -169,8 +185,11 @@ class AudioRIRDataset(Dataset):
         row = self.audio_df.iloc[idx]
         audiocap_id = row["audiocap_id"]
         caption = row["caption"]
-
-        dry = self._load_dry(audiocap_id)
+        try:
+            dry = self._load_dry(audiocap_id)
+        except Exception as e:
+            self._mark_bad(audiocap_id, e)
+            return None  # ← ここがポイント：丸ごとスキップ
 
         audio_features_list = []
         src_ids, spa_ids, texts, rir_meta = [], [], [], []
@@ -230,6 +249,11 @@ class AudioRIRDataset(Dataset):
     
 # ---------------- collate_fn (4 ch → 特徴辞書) -----------------------------
 def collate_fn(batch):
+    # 失敗サンプル（None）を取り除く
+    batch = [b for b in batch if b is not None]
+    if len(batch) == 0:
+        return None
+    # 以降は従来どおり flatten
     # 既存の flatten 処理
     audio_list, text_list, src_list, spa_list, rir_meta_list = [], [], [], [], []
     for sample in batch:

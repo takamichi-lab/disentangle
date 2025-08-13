@@ -1,0 +1,16 @@
+{"time":"2025-08-12T14:05:55.681976969+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250812_140555-mim45gvz/logs/debug-core.log"}
+{"time":"2025-08-12T14:05:55.963370395+09:00","level":"INFO","msg":"created new stream","id":"mim45gvz"}
+{"time":"2025-08-12T14:05:55.963383267+09:00","level":"INFO","msg":"stream: started","id":"mim45gvz"}
+{"time":"2025-08-12T14:05:55.963396407+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:05:55.96343841+09:00","level":"INFO","msg":"sender: started","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:05:55.963464558+09:00","level":"INFO","msg":"handler: started","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:05:56.274952631+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-12T14:11:21.316748091+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-12T14:11:21.316950045+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-12T14:11:22.244308587+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-12T14:11:22.318204879+09:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading history steps 42-42, summary, console lines 44-44","runtime_seconds":0.073824729}],"total_operations":1}}
+{"time":"2025-08-12T14:11:22.469417849+09:00","level":"INFO","msg":"stream: closing","id":"mim45gvz"}
+{"time":"2025-08-12T14:11:22.469423937+09:00","level":"INFO","msg":"handler: closed","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:11:22.469428018+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:11:22.46946887+09:00","level":"INFO","msg":"sender: closed","stream_id":"mim45gvz"}
+{"time":"2025-08-12T14:11:22.4694721+09:00","level":"INFO","msg":"stream: closed","id":"mim45gvz"}
