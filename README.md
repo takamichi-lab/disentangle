@@ -42,16 +42,18 @@
 
 ## 手法概要
 
-**音パス**
+![DELSA アーキテクチャ](delsa.PNG)
+**Audio Encoder**
 
-* HTSAT（CLAP）プーラ出力（768次元）
+* 音源属性ブランチ: HTSAT（CLAPと同様）出力（768次元）
 * 空間属性ブランチ: `I_act` / `I_rea`（強度ベクトル）を6層CNN×2で処理 → MLP → 44次元 → 線形で192次元
-* HTSAT出力と結合（768+192）→ MLP → 512次元共有音声埋め込み
+* 上記2つの出力を結合（768+192）→ MLP → 512次元Shared_Audio埋め込み
+* Shared_Audio埋め込みから**空間埋め込み（256次元）** と **音源埋め込み（512次元）**
 
-**テキストパス**
+**Text Encoder**
 
 * テキストエンコーダ出力（512次元）
-* 音声/テキスト共有埋め込みを**空間（256次元）** と **音源（512次元）** に分岐
+* Shared_Text埋め込みを**空間埋め込み（256次元）** と **音源埋め込み（512次元）** に分岐
 
 **物理ヘッド**
 
@@ -59,14 +61,14 @@
 
 **目的関数**
 
-* **教師ありコントラスト学習**（空間/音源）: multi-positive対応
+* **教師ありコントラスト学習**（空間/音源）: multi-positive対応. 空間, 音源それぞれに対して計算.
 * **物理Loss**: 方向はコサイン類似度損失（ラジアン）、他はMSE。学習時は正規化値、検証時は実スケールに戻す
 
 ## 評価指標
 上記に加えて以下もvalidation setに対して記録する.
 ### Retrieval（R\@K; multi-positive）
 
-**何を測るか**: 与えたクエリ（テキストまたは音声）の上位K件に、同一ID（タスクに応じて source または space）を持つ要素が少なくとも1つ含まれる割合。
+**何を測るか**: 与えたクエリ（テキストまたは音）の上位K件に、同一ID（タスクに応じて source または space）を持つ要素が少なくとも1つ含まれる割合。
 
 * タスク定義
 
@@ -96,26 +98,13 @@
 
 ## データ準備
 
-1. 音声（dry）: `{audiocap_id, caption}`列を持つCSVと48kHz・10秒長に揃えたMP3ファイル群
+1. 音（dry）: `{audiocap_id, caption}`列を持つCSVと48kHz・10秒長に揃えたMP3ファイル群
 2. RIRメタデータ: `rir_path, azimuth_deg, elevation_deg, source_distance_m, area_m2, fullband_T30_ms`
-3. 前計算済み検証（推奨）: `val_precomputed.csv`（`i_act/i_rea`特徴を含む）とRIRカタログ
+
+audio_rir_dataset.pyで2つを畳みこみfoa音　＋　空間キャプション　のセットを生成.
 
 ---
 
-## 実行例
-
-```bash
-# 環境構築
-conda create -n delsa python=3.10 -y
-conda activate delsa
-pip install torch torchaudio transformers pandas soundfile wandb pyyaml
-
-# 単一GPU学習
-python train_for_singleGPU.py config.yaml
-
-# マルチGPU学習
-torchrun --nproc_per_node=8 train_ddp.py 
-```
 
 ---
 
