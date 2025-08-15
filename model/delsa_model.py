@@ -6,7 +6,7 @@ from .shared_audio_encoder import AudioEncoder
 from .shared_text_encoder import TextEncoder
 import numpy as np
 from .RegressionHead import RegressionHead_for_physicalValue
-
+import math
 
 
 class DELSA(nn.Module):
@@ -80,6 +80,9 @@ class DELSA(nn.Module):
         area = self.area_head(z_space_a)            # 面積の予測 [B, 1]
         distance = self.distance_head(z_space_a)    # 距離の予測 [B, 1]
         reverb = self.reverb_head(z_space_a)      # 残響時間の予測 [B, 1]
+
+        # logit_scale = self.logit_scale
+        logit_scale_exp = self.logit_scale.clamp(max=math.log(1e2)).exp()
         # --- 出力を辞書形式でまとめる ---
         # ここで、各埋め込みと物理量の予測を辞書にまとめて返す
         # これにより、モデルの出力を簡単に扱えるようにする
@@ -90,7 +93,7 @@ class DELSA(nn.Module):
             "audio_source_emb": z_source_a,         # 音のソース埋め込み(B, out_source_dim)
             "text_space_emb": z_space_t,           # テキストの空間埋め込み (B, out_space_dim)
             "text_source_emb": z_source_t,          # テキストのソース埋め込み (B, out_source_dim)
-            "logit_scale": self.logit_scale,   # 学習可能な温度パラメータ
+            "logit_scale": logit_scale_exp,   # 学習可能な温度パラメータ
             "direction": direction,                # 方向の予測 (B, 2)
             "area": area,                          # 面積の予測 (B, 1)
             "distance": distance,                  # 距離の予測 (B, 1)

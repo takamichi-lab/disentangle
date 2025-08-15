@@ -1,3 +1,5 @@
+# train_ddp.py の一番上あたり
+
 #!/usr/bin/env python3
 # train_ddp.py — DDP (single-node multi-GPU) + AMP + Grad Accum (rank0-only eval)
 import os, math, random, sys, yaml, torch, torch.nn.functional as F
@@ -9,7 +11,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from contextlib import nullcontext
 import wandb
 
-from utils.metrics import invariance_ratio, leakage_probe_acc, linear_probe_regression
+from utils.metrics import invariance_ratio
 from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn
 from dataset.precomputed_val_dataset import PrecomputedValDataset
 from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval
@@ -78,8 +80,8 @@ def load_config(path: str | None = None) -> dict:
 
 def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude_diag=False):
     a = F.normalize(a, dim=1); b = F.normalize(b, dim=1)
-    scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
-    logits_t2a = (a @ b.T) * scale
+    #scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
+    logits_t2a = (a @ b.T) * logit_scale
     logits_a2t = logits_t2a.T if symmetric else None
 
     def _dir_loss(logits):
@@ -148,10 +150,10 @@ def main():
 
     # W&B (main process only)
     if cfg["wandb"] and _is_main_process():
-        if cfg["run_name"] is not None:
-            wandb.init(project=cfg["proj"], name=cfg["run_name"], config=cfg, save_code=True, mode="online")
-        else:
+        if cfg["run_name"] is None:
             wandb.init(project=cfg["proj"], config=cfg, save_code=True, mode="online")
+        else:
+            wandb.init(project=cfg["proj"], name=cfg["run_name"], config=cfg, save_code=True, mode="online")
     else:
         os.environ["WANDB_MODE"] = "disabled"
 
@@ -164,10 +166,12 @@ def main():
                           batch_size=cfg["batch_size"],   # per-GPU
                           shuffle=(train_sampler is None),
                           sampler=train_sampler,
-                          num_workers=4,
+                          num_workers=8,
                           collate_fn=collate_fn,
                           pin_memory=True,
-                          persistent_workers=False)
+                          persistent_workers=True,
+                          prefetch_factor=2)
+                          
 
     train_stats = {
         "area_mean": train_ds.area_mean, "area_std": train_ds.area_std,
@@ -188,12 +192,18 @@ def main():
     # -------- Model / Optim --------
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(device)
     if distributed:
-        model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
+        model = DDP(
+            model,
+            device_ids=[local_rank],
+            output_device=local_rank,
+            find_unused_parameters=True,   # ← ここを True
+            gradient_as_bucket_view=True   # （任意）性能安定向上のことが多い
+        )
 
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg.get("weight_decay", 0.0))
 
     use_amp = bool(cfg.get("use_amp", True))
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler(enabled=use_amp)
     grad_accum = max(1, int(cfg.get("grad_accum", 1)))
 
     def forward_once(batch):
@@ -216,12 +226,13 @@ def main():
 
             # DDP no_sync for gradient accumulation (all but last micro-step)
             ddp_sync = ( (step % grad_accum) == 0 )
-            sync_ctx = nullcontext()
             if distributed and not ddp_sync:
-                sync_ctx = model.no_sync  # type: ignore
+                sync_cm = model.no_sync()       # ← その場でコンテキスト生成
+            else:
+                sync_cm = nullcontext()         # ← こちらもインスタンスにする
 
-            with sync_ctx():
-                with torch.cuda.amp.autocast(enabled=use_amp):
+            with sync_cm:
+                with torch.amp.autocast(device_type="cuda", enabled=use_amp):
                     out = forward_once(batch)
                     a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
                     t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
@@ -277,7 +288,7 @@ def main():
                     src_lb = batch["source_id"].reshape(-1).to(device, non_blocking=True)
                     spa_lb = batch["space_id"].reshape(-1).to(device, non_blocking=True)
 
-                    with torch.cuda.amp.autocast(enabled=use_amp):
+                    with torch.amp.autocast(enabled=use_amp):
                         out = model(audio, texts)
                         a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
                         t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
@@ -287,6 +298,7 @@ def main():
 
                         l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
                         l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s)
+
                         phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, dataloader=val_dl, stats=train_stats)
 
                     val_losses["space"]    += l_sp.item()
