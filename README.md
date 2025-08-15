@@ -101,7 +101,7 @@
 1. 音（dry）: `{audiocap_id, caption}`列を持つCSVと48kHz・10秒長に揃えたMP3ファイル群
 2. RIRメタデータ: `rir_path, azimuth_deg, elevation_deg, source_distance_m, area_m2, fullband_T30_ms`
 
-audio_rir_dataset.pyで2つを畳みこみfoa音　＋　空間キャプション　のセットを生成.
+audio_rir_dataset.pyで2つを畳みこみfoa音　＋　空間キャプション　のペアを生成.
 
 ---
 
