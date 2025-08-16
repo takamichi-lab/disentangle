@@ -98,7 +98,8 @@ class AudioRIRDataset(Dataset):
                  batch_size : int | None = None,
                  stats_path: str = "/home/takamichi-lab-pc09/DELSA/RIR_dataset/stats.pt",
                  hop: int =100,
-                 bad_log_path: str | None = "bad_mp3_ids.txt"):
+                 bad_log_path: str | None = "bad_mp3_ids.txt",
+                 defer_convolution: bool = True):
         super().__init__()
         # ── 設定ロード ──
 
@@ -112,6 +113,7 @@ class AudioRIRDataset(Dataset):
         self.n_fft = n_fft
         self.hop = hop
         self.foa_len = int(FOA_SR*MAX_DURATION_SEC)
+        self.defer_convolution = defer_convolution
         # audio_csv読み込み
         df = pd.read_csv(csv_audio)
         df = df[df["audiocap_id"].apply(
@@ -212,29 +214,45 @@ class AudioRIRDataset(Dataset):
             rir_paths = random.sample(self.rir_paths, k=self.n_views)
 
         for rir_path in rir_paths:
-            wet = self._apply_rir(dry, rir_path) #[4, T10]   
-            #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
-             #ToDo済: captionも空間拡張する(ルールべースの書き換え)
-            meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
-            meta["area_m2_norm"]  = (meta["area_m2"]           - self.area_mean) / self.area_std
-            meta["distance_norm"] = (meta["source_distance_m"] - self.dist_mean) / self.dist_std
-            meta["t30_norm"]      = (meta["fullband_T30_ms"]   - self.t30_mean)  / self.t30_std
-            azimuth = meta["azimuth_deg"]
-            elevation = meta["elevation_deg"]
-            direction_vec = torch.tensor(
-                [np.deg2rad(azimuth), np.deg2rad(elevation)],
-                dtype=torch.float32
-            )
-            meta["direction_vec"] = direction_vec
-            caption_spatial = rewrite_caption(caption, meta)
-            omni_48k = wet[0]  # [T10]
-            
-            # 16kにリサンプリング
-            wet_16k = torchaudio.functional.resample(wet, orig_freq=FOA_SR, new_freq=IV_SR)
-            i_act, i_rea = foa_to_iv(wet_16k.unsqueeze(0), n_fft=self.n_fft, hop=self.hop)
-            i_act, i_rea = i_act.squeeze(0), i_rea.squeeze(0)
+            if self.defer_convolution:
+                audio_features_list.append({"dry": dry, "rir_path": rir_path}) #[4, T10]
+                meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
+                meta["area_m2_norm"]  = (meta["area_m2"]           - self.area_mean) / self.area_std
+                meta["distance_norm"] = (meta["source_distance_m"] - self.dist_mean) / self.dist_std
+                meta["t30_norm"]      = (meta["fullband_T30_ms"]   - self.t30_mean)  / self.t30_std
+                azimuth = meta["azimuth_deg"]
+                elevation = meta["elevation_deg"]
+                direction_vec = torch.tensor(
+                    [np.deg2rad(azimuth), np.deg2rad(elevation)],
+                    dtype=torch.float32
+                )
+                meta["direction_vec"] = direction_vec
+                caption_spatial = rewrite_caption(caption, meta)
 
-            audio_features_list.append({"i_act": i_act, "i_rea": i_rea, "omni_48k": omni_48k})
+            else: 
+                wet = self._apply_rir(dry, rir_path) #[4, T10]
+                #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
+                #ToDo済: captionも空間拡張する(ルールべースの書き換え)
+                meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
+                meta["area_m2_norm"]  = (meta["area_m2"]           - self.area_mean) / self.area_std
+                meta["distance_norm"] = (meta["source_distance_m"] - self.dist_mean) / self.dist_std
+                meta["t30_norm"]      = (meta["fullband_T30_ms"]   - self.t30_mean)  / self.t30_std
+                azimuth = meta["azimuth_deg"]
+                elevation = meta["elevation_deg"]
+                direction_vec = torch.tensor(
+                    [np.deg2rad(azimuth), np.deg2rad(elevation)],
+                    dtype=torch.float32
+                )
+                meta["direction_vec"] = direction_vec
+                caption_spatial = rewrite_caption(caption, meta)
+                omni_48k = wet[0]  # [T10]
+                
+                # 16kにリサンプリング
+                wet_16k = torchaudio.functional.resample(wet, orig_freq=FOA_SR, new_freq=IV_SR)
+                i_act, i_rea = foa_to_iv(wet_16k.unsqueeze(0), n_fft=self.n_fft, hop=self.hop)
+                i_act, i_rea = i_act.squeeze(0), i_rea.squeeze(0)
+
+                audio_features_list.append({"i_act": i_act, "i_rea": i_rea, "omni_48k": omni_48k})
             src_ids.append(self.source_map[idx])
             spa_ids.append(self.space_map[rir_path])
             texts.append(caption_spatial)
@@ -268,6 +286,7 @@ def collate_fn(batch):
     meta_keys = rir_meta_list[0].keys()
     rir_meta_dict = {}
     for key in meta_keys:
+        
         vals = [m[key] for m in rir_meta_list]
         first = vals[0]
 

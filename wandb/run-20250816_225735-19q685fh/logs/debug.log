@@ -1,0 +1,29 @@
+2025-08-16 22:57:35,685 INFO    MainThread:114655 [wandb_setup.py:_flush():70] Current SDK version is 0.19.11
+2025-08-16 22:57:35,685 INFO    MainThread:114655 [wandb_setup.py:_flush():70] Configure stats pid to 114655
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_setup.py:_flush():70] Loading settings from /home/takamichi-lab-pc09/.config/wandb/settings
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_setup.py:_flush():70] Loading settings from /home/takamichi-lab-pc09/DELSA/wandb/settings
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_setup.py:_flush():70] Loading settings from environment variables
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:setup_run_log_directory():724] Logging user logs to /home/takamichi-lab-pc09/DELSA/wandb/run-20250816_225735-19q685fh/logs/debug.log
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:setup_run_log_directory():725] Logging internal logs to /home/takamichi-lab-pc09/DELSA/wandb/run-20250816_225735-19q685fh/logs/debug-internal.log
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:init():852] calling init triggers
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:init():857] wandb.init called with sweep_config: {}
+config: {'audio_csv_train': 'AudioCaps_csv/train.csv', 'rir_csv_train': 'RIR_dataset/rir_catalog_train.csv', 'audio_csv_val': 'val_fixed_400x24/audio_fixed.csv', 'rir_csv_val': 'val_fixed_400x24/rir_fixed.csv', 'out_dir': '/home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio', 'SpatialAudio_csv_val': '/home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio', 'val_precomp_root': 'Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio', 'val_index_csv': 'Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio/val_precomputed.csv', 'val_batch_size': 64, 'audio_base': 'AudioCaps_mp3', 'batch_size': 8, 'n_views': 2, 'val_n_views': 24, 'epochs': 50, 'lr': 0.0001, 'device': 'cuda', 'wandb': True, 'proj': 'delsa-sup-contrast', 'run_name': 'None', 'split': 'train', '_wandb': {'code_path': 'code/train_for_singleGPU.py'}}
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:init():893] starting backend
+2025-08-16 22:57:35,686 INFO    MainThread:114655 [wandb_init.py:init():897] sending inform_init request
+2025-08-16 22:57:35,688 INFO    MainThread:114655 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-08-16 22:57:35,688 INFO    MainThread:114655 [wandb_init.py:init():907] backend started and connected
+2025-08-16 22:57:35,689 INFO    MainThread:114655 [wandb_init.py:init():1005] updated telemetry
+2025-08-16 22:57:35,691 INFO    MainThread:114655 [wandb_init.py:init():1029] communicating run to backend with 90.0 second timeout
+2025-08-16 22:57:36,269 INFO    MainThread:114655 [wandb_init.py:init():1104] starting run threads in backend
+2025-08-16 22:57:36,352 INFO    MainThread:114655 [wandb_run.py:_console_start():2573] atexit reg
+2025-08-16 22:57:36,352 INFO    MainThread:114655 [wandb_run.py:_redirect():2421] redirect: wrap_raw
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_redirect():2490] Wrapping output streams.
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_redirect():2513] Redirects installed.
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_init.py:init():1150] run started, returning control to user process
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_finish():2321] finishing run uesho131131-keio-jp/delsa-sup-contrast/19q685fh
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_atexit_cleanup():2538] got exitcode: 0
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_restore():2520] restore
+2025-08-16 22:57:36,353 INFO    MainThread:114655 [wandb_run.py:_restore():2526] restore done
+2025-08-16 22:57:37,740 INFO    MainThread:114655 [wandb_run.py:_footer_history_summary_info():4188] rendering history
+2025-08-16 22:57:37,740 INFO    MainThread:114655 [wandb_run.py:_footer_history_summary_info():4220] rendering summary
+2025-08-16 22:57:37,740 INFO    MainThread:114655 [wandb_run.py:_footer_sync_info():4149] logging synced files

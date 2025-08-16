@@ -7,7 +7,7 @@ from pathlib import Path
 import random, wandb, math, sys, yaml
 from utils.metrics import invariance_ratio, leakage_probe_acc, linear_probe_regression
 
-from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
+from dataset.audio_rir_dataset_old import AudioRIRDataset, collate_fn   # 既存
 from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
 from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi                   # 追加②
 from model.delsa_model import DELSA                                # ← 修正

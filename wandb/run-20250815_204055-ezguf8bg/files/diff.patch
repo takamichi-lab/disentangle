@@ -1,0 +1,64 @@
+diff --git a/config.yaml b/config.yaml
+index 008b1cb..2d2598d 100644
+--- a/config.yaml
++++ b/config.yaml
+@@ -17,7 +17,7 @@ val_batch_size: 64
+ 
+ audio_base: AudioCaps_mp3 
+ batch_size: 8
+-n_views: 8
++n_views: 2
+ val_n_views: 24
+ epochs: 50
+ lr: 0.0001
+diff --git a/model/__pycache__/delsa_model.cpython-312.pyc b/model/__pycache__/delsa_model.cpython-312.pyc
+index a2c4f5b..7634d8c 100644
+Binary files a/model/__pycache__/delsa_model.cpython-312.pyc and b/model/__pycache__/delsa_model.cpython-312.pyc differ
+diff --git a/train_for_singleGPU.py b/train_for_singleGPU.py
+index d5a335d..e20b9f0 100644
+--- a/train_for_singleGPU.py
++++ b/train_for_singleGPU.py
+@@ -1,11 +1,11 @@
+ #!/usr/bin/env python3
+-# train.py  ― supervised contrastive (source / space) + per-epoch retrieval eval
++# train_for_singleGPU.py  ― supervised contrastive (source / space) + per-epoch retrieval eval
+ from utils.metrics import invariance_ratio
+ import torch, torch.nn.functional as F
+ from torch.utils.data import DataLoader
+ from pathlib import Path
+ import random, wandb, math, sys, yaml
+-from utils.metrics import invariance_ratio, leakage_probe_acc, linear_probe_regression
++from utils.metrics import invariance_ratio
+ 
+ from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
+ from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
+diff --git a/utils/__pycache__/metrics.cpython-312.pyc b/utils/__pycache__/metrics.cpython-312.pyc
+index 62f62c5..f023462 100644
+Binary files a/utils/__pycache__/metrics.cpython-312.pyc and b/utils/__pycache__/metrics.cpython-312.pyc differ
+diff --git a/wandb/debug-internal.log b/wandb/debug-internal.log
+index 03c8713..dac2743 120000
+--- a/wandb/debug-internal.log
++++ b/wandb/debug-internal.log
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec/logs/debug-internal.log
+\ No newline at end of file
++run-20250815_204055-ezguf8bg/logs/debug-internal.log
+\ No newline at end of file
+diff --git a/wandb/debug.log b/wandb/debug.log
+index c336e74..30d199c 120000
+--- a/wandb/debug.log
++++ b/wandb/debug.log
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec/logs/debug.log
+\ No newline at end of file
++run-20250815_204055-ezguf8bg/logs/debug.log
+\ No newline at end of file
+diff --git a/wandb/latest-run b/wandb/latest-run
+index 04de0af..c2d4169 120000
+--- a/wandb/latest-run
++++ b/wandb/latest-run
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec
+\ No newline at end of file
++run-20250815_204055-ezguf8bg
+\ No newline at end of file

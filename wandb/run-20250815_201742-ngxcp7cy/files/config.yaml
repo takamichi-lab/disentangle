@@ -1,0 +1,76 @@
+_wandb:
+    value:
+        cli_version: 0.19.11
+        code_path: code/train_for_singleGPU.py
+        m: []
+        python_version: 3.12.3
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+            "3":
+                - 2
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.12.3
+            "5": 0.19.11
+            "6": 4.52.4
+            "8":
+                - 5
+            "12": 0.19.11
+            "13": linux-x86_64
+SpatialAudio_csv_val:
+    value: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio
+audio_base:
+    value: AudioCaps_mp3
+audio_csv_train:
+    value: AudioCaps_csv/train.csv
+audio_csv_val:
+    value: val_fixed_400x24/audio_fixed.csv
+batch_size:
+    value: 8
+device:
+    value: cuda
+epochs:
+    value: 50
+lr:
+    value: 0.0001
+n_views:
+    value: 8
+out_dir:
+    value: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio
+proj:
+    value: delsa-sup-contrast
+rir_csv_train:
+    value: RIR_dataset/rir_catalog_train.csv
+rir_csv_val:
+    value: val_fixed_400x24/rir_fixed.csv
+run_name:
+    value: None
+split:
+    value: train
+val_batch_size:
+    value: 64
+val_index_csv:
+    value: Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio/val_precomputed.csv
+val_n_views:
+    value: 24
+val_precomp_root:
+    value: Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio
+wandb:
+    value: true

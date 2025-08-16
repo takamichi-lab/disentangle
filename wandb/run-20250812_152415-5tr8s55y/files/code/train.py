@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 import random, wandb, math, sys, yaml
 
-from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
+from dataset.audio_rir_dataset_old import AudioRIRDataset, collate_fn   # 既存
 from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
 from utils.metrics import cosine_sim, recall_at_k                   # 追加②
 from model.delsa_model import DELSA                                # ← 修正

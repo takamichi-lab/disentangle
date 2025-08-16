@@ -1,0 +1,304 @@
+diff --git a/bad_mp3_ids.txt b/bad_mp3_ids.txt
+index 82a7731..a0f774f 100644
+--- a/bad_mp3_ids.txt
++++ b/bad_mp3_ids.txt
+@@ -3,3 +3,4 @@
+ 72870	LibsndfileError	Error opening 'AudioCaps_mp3/train/72870.mp3': File does not exist or is not a regular file (possibly a pipe?).
+ 24172	LibsndfileError	Error opening 'AudioCaps_mp3/train/24172.mp3': File does not exist or is not a regular file (possibly a pipe?).
+ 24172	LibsndfileError	Error opening 'AudioCaps_mp3/train/24172.mp3': File does not exist or is not a regular file (possibly a pipe?).
++77971	LibsndfileError	Error opening 'AudioCaps_mp3/train/77971.mp3': File does not exist or is not a regular file (possibly a pipe?).
+diff --git a/config.yaml b/config.yaml
+index 008b1cb..2d2598d 100644
+--- a/config.yaml
++++ b/config.yaml
+@@ -17,7 +17,7 @@ val_batch_size: 64
+ 
+ audio_base: AudioCaps_mp3 
+ batch_size: 8
+-n_views: 8
++n_views: 2
+ val_n_views: 24
+ epochs: 50
+ lr: 0.0001
+diff --git a/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc b/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc
+index 363972c..58d736c 100644
+Binary files a/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc and b/dataset/__pycache__/audio_rir_dataset.cpython-312.pyc differ
+diff --git a/dataset/__pycache__/precomputed_val_dataset.cpython-312.pyc b/dataset/__pycache__/precomputed_val_dataset.cpython-312.pyc
+index 24fa79d..8eff6a3 100644
+Binary files a/dataset/__pycache__/precomputed_val_dataset.cpython-312.pyc and b/dataset/__pycache__/precomputed_val_dataset.cpython-312.pyc differ
+diff --git a/dataset/audio_rir_dataset.py b/dataset/audio_rir_dataset.py
+index db3ae5d..d0796fa 100644
+--- a/dataset/audio_rir_dataset.py
++++ b/dataset/audio_rir_dataset.py
+@@ -98,7 +98,8 @@ class AudioRIRDataset(Dataset):
+                  batch_size : int | None = None,
+                  stats_path: str = "/home/takamichi-lab-pc09/DELSA/RIR_dataset/stats.pt",
+                  hop: int =100,
+-                 bad_log_path: str | None = "bad_mp3_ids.txt"):
++                 bad_log_path: str | None = "bad_mp3_ids.txt",
++                 defer_convolution: bool = True):
+         super().__init__()
+         # ── 設定ロード ──
+ 
+@@ -112,6 +113,7 @@ class AudioRIRDataset(Dataset):
+         self.n_fft = n_fft
+         self.hop = hop
+         self.foa_len = int(FOA_SR*MAX_DURATION_SEC)
++        self.defer_convolution = defer_convolution
+         # audio_csv読み込み
+         df = pd.read_csv(csv_audio)
+         df = df[df["audiocap_id"].apply(
+@@ -212,7 +214,8 @@ class AudioRIRDataset(Dataset):
+             rir_paths = random.sample(self.rir_paths, k=self.n_views)
+ 
+         for rir_path in rir_paths:
+-            wet = self._apply_rir(dry, rir_path) #[4, T10]   
++            if self.defer_convolution:
++                audio_features_list.append({"dry": dry, "rir_path": rir_path})
+             #ToDo済: A-format to B-format　　　Spatial_AudioCaps/scripts/SpatialAudio.pyを参考に
+              #ToDo済: captionも空間拡張する(ルールべースの書き換え)
+             meta = self.rir_meta[rir_path].copy()      # シャローコピーで安全に複製 :contentReference[oaicite:5]{index=5}
+diff --git a/model/__pycache__/delsa_model.cpython-312.pyc b/model/__pycache__/delsa_model.cpython-312.pyc
+index a2c4f5b..7634d8c 100644
+Binary files a/model/__pycache__/delsa_model.cpython-312.pyc and b/model/__pycache__/delsa_model.cpython-312.pyc differ
+diff --git a/others/precompute_val.py b/others/precompute_val.py
+index bb5f5be..b75ce44 100644
+--- a/others/precompute_val.py
++++ b/others/precompute_val.py
+@@ -178,3 +178,6 @@ if __name__ == "__main__":
+     p.add_argument("--out_dir", help="Output root (default: data/val_precomputed)")
+     p.add_argument("--n_views", type=int, help="<=0 なら RIR 全部を使用（デフォルトは config.yaml の n_views）")
+     main(p.parse_args())
++
++
++
+diff --git a/train_ddp.py b/train_ddp.py
+index 536e967..dcb3e74 100644
+--- a/train_ddp.py
++++ b/train_ddp.py
+@@ -12,8 +12,9 @@ from contextlib import nullcontext
+ import wandb
+ 
+ from utils.metrics import invariance_ratio
+-from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn
++from dataset.audio_rir_dataset_old import AudioRIRDataset, collate_fn
+ from dataset.precomputed_val_dataset import PrecomputedValDataset
++from dataset.collate_fn_gpu import collate_fn_gpu
+ from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval
+ from model.delsa_model import DELSA
+ 
+@@ -79,23 +80,54 @@ def load_config(path: str | None = None) -> dict:
+     return cfg
+ 
+ def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude_diag=False):
++    """
++    Traditional Supervised Contrastive (Khosla et al., 2020) に準拠した2塔版。
++    - 同ラベルを正例。2塔なので a のアンカーに対して b 側の同ラベル全てが正例。
++    - exclude_diag=True のときは、対角 (i,i) を【分子・分母の両方】から外す（完全一貫）。
++      False のときは対角を分子・分母の両方に含める（同一インスタンス正例を含める）。
++    """
+     a = F.normalize(a, dim=1); b = F.normalize(b, dim=1)
+-    #scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
+-    logits_t2a = (a @ b.T) * logit_scale
++
++    # CLIP式のlogスケールを渡しているならこちらを使う：
++    # scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
++    # そうでなければ logit_scale は線形スカラーとして渡す
++    scale = logit_scale
++
++    logits_t2a = (a @ b.T) * scale
+     logits_a2t = logits_t2a.T if symmetric else None
+ 
++    labels = labels.view(-1)
++
+     def _dir_loss(logits):
+         B = logits.size(0)
+-        pos_mask = labels[:, None].eq(labels[None, :])
+-        max_sim, _ = logits.max(dim=1, keepdim=True)
+-        logits = logits - max_sim.detach()
+-        diag_mask = torch.eye(B, dtype=torch.bool, device=logits.device) if exclude_diag else torch.zeros(B,B,dtype=torch.bool, device=logits.device)
+-        exp_sim = torch.exp(logits) * (~diag_mask)
+-        denom = exp_sim.sum(dim=1, keepdim=True) + eps
++
++        # 正例マスク（同ラベル）。2塔なので「自分自身のベクトル」は存在しない。
++        pos_mask = labels[:, None].eq(labels[None, :]).float()
++
++        # 数値安定化
++        logits = logits - logits.max(dim=1, keepdim=True).values.detach()
++
++        # 分母マスク：exclude_diag によって対角を分子・分母で一貫処理
++        if exclude_diag:
++            pos_mask = pos_mask.clone()
++            pos_mask.fill_diagonal_(0.0)  # 分子からも対角を除外（完全一貫）
++            denom_mask = (~torch.eye(B, dtype=torch.bool, device=logits.device)).float()
++        else:
++            denom_mask = torch.ones_like(pos_mask)
++
++        exp_logits = torch.exp(logits) * denom_mask
++        denom = exp_logits.sum(dim=1, keepdim=True) + eps
+         log_prob = logits - denom.log()
+-        mean_log_pos = (log_prob * pos_mask.float()).sum(dim=1) / pos_mask.sum(dim=1).clamp(min=1)
+-        valid = pos_mask.any(dim=1)
+-        return -mean_log_pos[valid].mean()
++
++        pos_counts = pos_mask.sum(dim=1, keepdim=True)
++        # アンカーごとの正例平均（SupConの 1/|P(i)| Σ_{p∈P(i)} log p を実装）
++        mean_log_pos = (pos_mask * log_prob).sum(dim=1, keepdim=True) / pos_counts.clamp(min=1.0)
++
++        valid = (pos_counts.squeeze(1) > 0)
++        if valid.any():
++            return -(mean_log_pos[valid]).mean()
++        # 極端にクラスが偏って正例ゼロ行しか無い場合のフォールバック
++        return torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+ 
+     loss_t2a = _dir_loss(logits_t2a)
+     if symmetric:
+@@ -160,14 +192,14 @@ def main():
+     # -------- Train loader --------
+     train_ds = AudioRIRDataset(csv_audio=cfg["audio_csv_train"], base_dir=cfg["audio_base"],
+                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
+-                               split=cfg["split"], batch_size=cfg["batch_size"])
++                               split=cfg["split"], batch_size=cfg["batch_size"],defer_convolution=True)
+     train_sampler = DistributedSampler(train_ds, shuffle=True) if distributed else None
+     train_dl = DataLoader(train_ds,
+                           batch_size=cfg["batch_size"],   # per-GPU
+                           shuffle=(train_sampler is None),
+                           sampler=train_sampler,
+                           num_workers=8,
+-                          collate_fn=collate_fn,
++                          collate_fn=collate_fn_gpu,
+                           pin_memory=True,
+                           persistent_workers=True,
+                           prefetch_factor=2)
+diff --git a/train_for_singleGPU.py b/train_for_singleGPU.py
+index d5a335d..065ae38 100644
+--- a/train_for_singleGPU.py
++++ b/train_for_singleGPU.py
+@@ -1,14 +1,15 @@
+ #!/usr/bin/env python3
+-# train.py  ― supervised contrastive (source / space) + per-epoch retrieval eval
++# train_for_singleGPU.py  ― supervised contrastive (source / space) + per-epoch retrieval eval
+ from utils.metrics import invariance_ratio
+ import torch, torch.nn.functional as F
+ from torch.utils.data import DataLoader
+ from pathlib import Path
+ import random, wandb, math, sys, yaml
+-from utils.metrics import invariance_ratio, leakage_probe_acc, linear_probe_regression
++from utils.metrics import invariance_ratio
+ 
+-from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
++from dataset.audio_rir_dataset_old import AudioRIRDataset, collate_fn   # 既存
+ from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
++from dataset.collate_fn_gpu import collate_fn_gpu
+ from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval              # 追加②
+ from model.delsa_model import DELSA                                # ← 修正
+ 
+@@ -52,24 +53,56 @@ def load_config(path: str | None = None) -> dict:
+     cfg["device"] = _select_device(cfg["device"])
+     return cfg
+ 
++
+ def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude_diag=False):
++    """
++    Traditional Supervised Contrastive (Khosla et al., 2020) に準拠した2塔版。
++    - 同ラベルを正例。2塔なので a のアンカーに対して b 側の同ラベル全てが正例。
++    - exclude_diag=True のときは、対角 (i,i) を【分子・分母の両方】から外す（完全一貫）。
++      False のときは対角を分子・分母の両方に含める（同一インスタンス正例を含める）。
++    """
+     a = F.normalize(a, dim=1); b = F.normalize(b, dim=1)
+-    scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
++
++    # CLIP式のlogスケールを渡しているならこちらを使う：
++    # scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
++    # そうでなければ logit_scale は線形スカラーとして渡す
++    scale = logit_scale
++
+     logits_t2a = (a @ b.T) * scale
+     logits_a2t = logits_t2a.T if symmetric else None
+ 
++    labels = labels.view(-1)
++
+     def _dir_loss(logits):
+         B = logits.size(0)
+-        pos_mask = labels[:, None].eq(labels[None, :])
+-        max_sim, _ = logits.max(dim=1, keepdim=True)
+-        logits = logits - max_sim.detach()
+-        diag_mask = torch.eye(B, dtype=torch.bool, device=logits.device) if exclude_diag else torch.zeros(B,B,dtype=torch.bool, device=logits.device)
+-        exp_sim = torch.exp(logits) * (~diag_mask)
+-        denom = exp_sim.sum(dim=1, keepdim=True) + eps
++
++        # 正例マスク（同ラベル）。2塔なので「自分自身のベクトル」は存在しない。
++        pos_mask = labels[:, None].eq(labels[None, :]).float()
++
++        # 数値安定化
++        logits = logits - logits.max(dim=1, keepdim=True).values.detach()
++
++        # 分母マスク：exclude_diag によって対角を分子・分母で一貫処理
++        if exclude_diag:
++            pos_mask = pos_mask.clone()
++            pos_mask.fill_diagonal_(0.0)  # 分子からも対角を除外（完全一貫）
++            denom_mask = (~torch.eye(B, dtype=torch.bool, device=logits.device)).float()
++        else:
++            denom_mask = torch.ones_like(pos_mask)
++
++        exp_logits = torch.exp(logits) * denom_mask
++        denom = exp_logits.sum(dim=1, keepdim=True) + eps
+         log_prob = logits - denom.log()
+-        mean_log_pos = (log_prob * pos_mask.float()).sum(dim=1) / pos_mask.sum(dim=1).clamp(min=1)
+-        valid = pos_mask.any(dim=1)
+-        return -mean_log_pos[valid].mean()
++
++        pos_counts = pos_mask.sum(dim=1, keepdim=True)
++        # アンカーごとの正例平均（SupConの 1/|P(i)| Σ_{p∈P(i)} log p を実装）
++        mean_log_pos = (pos_mask * log_prob).sum(dim=1, keepdim=True) / pos_counts.clamp(min=1.0)
++
++        valid = (pos_counts.squeeze(1) > 0)
++        if valid.any():
++            return -(mean_log_pos[valid]).mean()
++        # 極端にクラスが偏って正例ゼロ行しか無い場合のフォールバック
++        return torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+ 
+     loss_t2a = _dir_loss(logits_t2a)
+     if symmetric:
+@@ -123,9 +156,9 @@ def main():
+     # -------- Train loader (従来通り) --------
+     train_ds = AudioRIRDataset(csv_audio=cfg["audio_csv_train"], base_dir=cfg["audio_base"],
+                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
+-                               split=cfg["split"], batch_size=cfg["batch_size"])
++                               split=cfg["split"], batch_size=cfg["batch_size"],defer_convolution=True)
+     train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=4,
+-                          collate_fn=collate_fn, pin_memory=False)
++                          collate_fn=collate_fn_gpu, pin_memory=False)
+     train_stats = {
+         "area_mean": train_ds.area_mean, "area_std": train_ds.area_std,
+         "dist_mean": train_ds.dist_mean, "dist_std": train_ds.dist_std,
+diff --git a/utils/__pycache__/metrics.cpython-312.pyc b/utils/__pycache__/metrics.cpython-312.pyc
+index 62f62c5..f023462 100644
+Binary files a/utils/__pycache__/metrics.cpython-312.pyc and b/utils/__pycache__/metrics.cpython-312.pyc differ
+diff --git a/wandb/debug-internal.log b/wandb/debug-internal.log
+index 03c8713..9c6c6ec 120000
+--- a/wandb/debug-internal.log
++++ b/wandb/debug-internal.log
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec/logs/debug-internal.log
+\ No newline at end of file
++run-20250816_225018-w0qzknjd/logs/debug-internal.log
+\ No newline at end of file
+diff --git a/wandb/debug.log b/wandb/debug.log
+index c336e74..32f48d3 120000
+--- a/wandb/debug.log
++++ b/wandb/debug.log
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec/logs/debug.log
+\ No newline at end of file
++run-20250816_225018-w0qzknjd/logs/debug.log
+\ No newline at end of file
+diff --git a/wandb/latest-run b/wandb/latest-run
+index 04de0af..95f0c5a 120000
+--- a/wandb/latest-run
++++ b/wandb/latest-run
+@@ -1 +1 @@
+-run-20250812_173509-3vs81wec
+\ No newline at end of file
++run-20250816_225018-w0qzknjd
+\ No newline at end of file

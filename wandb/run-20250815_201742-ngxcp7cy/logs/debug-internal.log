@@ -1,0 +1,16 @@
+{"time":"2025-08-15T20:17:42.861833755+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250815_201742-ngxcp7cy/logs/debug-core.log"}
+{"time":"2025-08-15T20:17:43.142275657+09:00","level":"INFO","msg":"created new stream","id":"ngxcp7cy"}
+{"time":"2025-08-15T20:17:43.14229894+09:00","level":"INFO","msg":"stream: started","id":"ngxcp7cy"}
+{"time":"2025-08-15T20:17:43.142361329+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:17:43.142386599+09:00","level":"INFO","msg":"sender: started","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:17:43.142469619+09:00","level":"INFO","msg":"handler: started","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:17:43.491694274+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-15T20:40:48.90169616+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-15T20:40:48.901727227+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-15T20:40:49.903307153+09:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading config.yaml","runtime_seconds":0.365554847,"progress":"1.7KB/1.7KB"}],"total_operations":1}}
+{"time":"2025-08-15T20:40:50.052704178+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-15T20:40:50.30518793+09:00","level":"INFO","msg":"stream: closing","id":"ngxcp7cy"}
+{"time":"2025-08-15T20:40:50.30519341+09:00","level":"INFO","msg":"handler: closed","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:40:50.305196483+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:40:50.305236095+09:00","level":"INFO","msg":"sender: closed","stream_id":"ngxcp7cy"}
+{"time":"2025-08-15T20:40:50.305238743+09:00","level":"INFO","msg":"stream: closed","id":"ngxcp7cy"}

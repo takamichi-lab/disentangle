@@ -79,23 +79,54 @@ def load_config(path: str | None = None) -> dict:
     return cfg
 
 def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude_diag=False):
+    """
+    Traditional Supervised Contrastive (Khosla et al., 2020) に準拠した2塔版。
+    - 同ラベルを正例。2塔なので a のアンカーに対して b 側の同ラベル全てが正例。
+    - exclude_diag=True のときは、対角 (i,i) を【分子・分母の両方】から外す（完全一貫）。
+      False のときは対角を分子・分母の両方に含める（同一インスタンス正例を含める）。
+    """
     a = F.normalize(a, dim=1); b = F.normalize(b, dim=1)
-    #scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
-    logits_t2a = (a @ b.T) * logit_scale
+
+    # CLIP式のlogスケールを渡しているならこちらを使う：
+    # scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
+    # そうでなければ logit_scale は線形スカラーとして渡す
+    scale = logit_scale
+
+    logits_t2a = (a @ b.T) * scale
     logits_a2t = logits_t2a.T if symmetric else None
+
+    labels = labels.view(-1)
 
     def _dir_loss(logits):
         B = logits.size(0)
-        pos_mask = labels[:, None].eq(labels[None, :])
-        max_sim, _ = logits.max(dim=1, keepdim=True)
-        logits = logits - max_sim.detach()
-        diag_mask = torch.eye(B, dtype=torch.bool, device=logits.device) if exclude_diag else torch.zeros(B,B,dtype=torch.bool, device=logits.device)
-        exp_sim = torch.exp(logits) * (~diag_mask)
-        denom = exp_sim.sum(dim=1, keepdim=True) + eps
+
+        # 正例マスク（同ラベル）。2塔なので「自分自身のベクトル」は存在しない。
+        pos_mask = labels[:, None].eq(labels[None, :]).float()
+
+        # 数値安定化
+        logits = logits - logits.max(dim=1, keepdim=True).values.detach()
+
+        # 分母マスク：exclude_diag によって対角を分子・分母で一貫処理
+        if exclude_diag:
+            pos_mask = pos_mask.clone()
+            pos_mask.fill_diagonal_(0.0)  # 分子からも対角を除外（完全一貫）
+            denom_mask = (~torch.eye(B, dtype=torch.bool, device=logits.device)).float()
+        else:
+            denom_mask = torch.ones_like(pos_mask)
+
+        exp_logits = torch.exp(logits) * denom_mask
+        denom = exp_logits.sum(dim=1, keepdim=True) + eps
         log_prob = logits - denom.log()
-        mean_log_pos = (log_prob * pos_mask.float()).sum(dim=1) / pos_mask.sum(dim=1).clamp(min=1)
-        valid = pos_mask.any(dim=1)
-        return -mean_log_pos[valid].mean()
+
+        pos_counts = pos_mask.sum(dim=1, keepdim=True)
+        # アンカーごとの正例平均（SupConの 1/|P(i)| Σ_{p∈P(i)} log p を実装）
+        mean_log_pos = (pos_mask * log_prob).sum(dim=1, keepdim=True) / pos_counts.clamp(min=1.0)
+
+        valid = (pos_counts.squeeze(1) > 0)
+        if valid.any():
+            return -(mean_log_pos[valid]).mean()
+        # 極端にクラスが偏って正例ゼロ行しか無い場合のフォールバック
+        return torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
 
     loss_t2a = _dir_loss(logits_t2a)
     if symmetric:

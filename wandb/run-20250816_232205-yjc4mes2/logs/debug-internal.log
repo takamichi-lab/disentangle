@@ -1,0 +1,16 @@
+{"time":"2025-08-16T23:22:05.082790586+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250816_232205-yjc4mes2/logs/debug-core.log"}
+{"time":"2025-08-16T23:22:05.364280545+09:00","level":"INFO","msg":"created new stream","id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:05.364308267+09:00","level":"INFO","msg":"stream: started","id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:05.364415486+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:05.364466191+09:00","level":"INFO","msg":"handler: started","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:05.364520438+09:00","level":"INFO","msg":"sender: started","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:05.606460842+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-16T23:22:09.704134414+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-16T23:22:09.704176388+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-16T23:22:10.365022024+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-16T23:22:10.623522124+09:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-16T23:22:10.625243248+09:00","level":"INFO","msg":"stream: closing","id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:10.625246753+09:00","level":"INFO","msg":"handler: closed","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:10.625249841+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:10.625285678+09:00","level":"INFO","msg":"sender: closed","stream_id":"yjc4mes2"}
+{"time":"2025-08-16T23:22:10.625294882+09:00","level":"INFO","msg":"stream: closed","id":"yjc4mes2"}

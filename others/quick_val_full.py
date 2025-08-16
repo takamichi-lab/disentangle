@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader
 # Reuse project modules
 from train_for_singleGPU import load_config, sup_contrast, physical_loss, eval_retrieval,recursive_to
 from dataset.precomputed_val_dataset import PrecomputedValDataset
-from dataset.audio_rir_dataset import collate_fn
+from dataset.audio_rir_dataset_old import collate_fn
 from model.delsa_model import DELSA
 from utils.metrics import invariance_ratio, cosine_sim
 def _wrap(loader, desc: str, leave=False):
@@ -91,7 +91,7 @@ def main():
     val_dl = DataLoader(val_ds, batch_size=val_bs, shuffle=False, num_workers=4,
                         collate_fn=collate_fn, pin_memory=False)
     # val_ds 作成の下あたりに追加
-    from dataset.audio_rir_dataset import AudioRIRDataset
+    from dataset.audio_rir_dataset_old import AudioRIRDataset
 
     try:
         train_ds = AudioRIRDataset(

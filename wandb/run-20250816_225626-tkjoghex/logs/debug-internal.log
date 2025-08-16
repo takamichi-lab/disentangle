@@ -1,0 +1,16 @@
+{"time":"2025-08-16T22:56:26.448386409+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250816_225626-tkjoghex/logs/debug-core.log"}
+{"time":"2025-08-16T22:56:26.731885126+09:00","level":"INFO","msg":"created new stream","id":"tkjoghex"}
+{"time":"2025-08-16T22:56:26.731914636+09:00","level":"INFO","msg":"stream: started","id":"tkjoghex"}
+{"time":"2025-08-16T22:56:26.732067189+09:00","level":"INFO","msg":"handler: started","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:26.731941482+09:00","level":"INFO","msg":"sender: started","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:26.732479015+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:27.187551185+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-16T22:56:32.176462164+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-16T22:56:32.176619781+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-16T22:56:32.842858456+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-16T22:56:33.066630026+09:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-16T22:56:33.069033603+09:00","level":"INFO","msg":"stream: closing","id":"tkjoghex"}
+{"time":"2025-08-16T22:56:33.069047992+09:00","level":"INFO","msg":"handler: closed","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:33.069056067+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:33.069119241+09:00","level":"INFO","msg":"sender: closed","stream_id":"tkjoghex"}
+{"time":"2025-08-16T22:56:33.069129167+09:00","level":"INFO","msg":"stream: closed","id":"tkjoghex"}

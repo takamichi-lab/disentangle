@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn  # existing
+from dataset.audio_rir_dataset_old import AudioRIRDataset, collate_fn  # existing
 
 from model.delsa_model import DELSA  # repo root
 

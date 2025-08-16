@@ -178,3 +178,6 @@ if __name__ == "__main__":
     p.add_argument("--out_dir", help="Output root (default: data/val_precomputed)")
     p.add_argument("--n_views", type=int, help="<=0 なら RIR 全部を使用（デフォルトは config.yaml の n_views）")
     main(p.parse_args())
+
+
+

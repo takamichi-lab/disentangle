@@ -1,0 +1,42 @@
+{
+  "os": "Linux-6.14.0-27-generic-x86_64-with-glibc2.39",
+  "python": "CPython 3.12.3",
+  "startedAt": "2025-08-16T14:21:23.200466Z",
+  "program": "/home/takamichi-lab-pc09/DELSA/train_for_singleGPU.py",
+  "codePath": "train_for_singleGPU.py",
+  "git": {
+    "remote": "https://github.com/takamichi-lab/disentangle.git",
+    "commit": "b83cc84193f186a727795eee3eea2502630d916c"
+  },
+  "email": "uesho131@keio.jp",
+  "root": "/home/takamichi-lab-pc09/DELSA",
+  "host": "takamichi-lab-pc09",
+  "executable": "/home/takamichi-lab-pc09/DELSA/.venv/bin/python3",
+  "codePathLocal": "train_for_singleGPU.py",
+  "cpu_count": 24,
+  "cpu_count_logical": 32,
+  "gpu": "NVIDIA RTX A6000",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1005867986944",
+      "used": "847348088832"
+    }
+  },
+  "memory": {
+    "total": "67255697408"
+  },
+  "cpu": {
+    "count": 24,
+    "countLogical": 32
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.8"
+}

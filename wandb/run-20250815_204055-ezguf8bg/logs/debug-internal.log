@@ -1,0 +1,16 @@
+{"time":"2025-08-15T20:40:55.539830138+09:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/takamichi-lab-pc09/DELSA/wandb/run-20250815_204055-ezguf8bg/logs/debug-core.log"}
+{"time":"2025-08-15T20:40:55.822409636+09:00","level":"INFO","msg":"created new stream","id":"ezguf8bg"}
+{"time":"2025-08-15T20:40:55.822436523+09:00","level":"INFO","msg":"stream: started","id":"ezguf8bg"}
+{"time":"2025-08-15T20:40:55.82246075+09:00","level":"INFO","msg":"handler: started","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:40:55.822492353+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:40:55.822520943+09:00","level":"INFO","msg":"sender: started","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:40:56.068975675+09:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-08-15T20:56:20.970968944+09:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-08-15T20:56:20.971134415+09:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-08-15T20:56:21.860366494+09:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-15T20:56:21.972538604+09:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading history steps 125-125, summary, console lines 127-127","runtime_seconds":0.112108777}],"total_operations":1}}
+{"time":"2025-08-15T20:56:22.120316185+09:00","level":"INFO","msg":"stream: closing","id":"ezguf8bg"}
+{"time":"2025-08-15T20:56:22.120321557+09:00","level":"INFO","msg":"handler: closed","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:56:22.120324891+09:00","level":"INFO","msg":"writer: Close: closed","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:56:22.120355468+09:00","level":"INFO","msg":"sender: closed","stream_id":"ezguf8bg"}
+{"time":"2025-08-15T20:56:22.120359084+09:00","level":"INFO","msg":"stream: closed","id":"ezguf8bg"}
