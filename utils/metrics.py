@@ -7,7 +7,7 @@ def cosine_sim(a_emb: torch.Tensor, t_emb: torch.Tensor):
     a = F.normalize(a_emb, dim=-1); t = F.normalize(t_emb, dim=-1)
     return t @ a.T  # [N_text, N_audio]
 @torch.no_grad()
-def eval_retrieval(model, loader, device, use_wandb=True, epoch=None):
+def eval_retrieval(a_spa, a_src, t_spa, t_src, src_lb, spa_lb, device, use_wandb=True, epoch=None):
     """
     Retrieval (multi-positive; no pooling)
       - On-task:  SRC (audio_source <-> text_source), SPA (audio_space <-> text_space)
@@ -15,28 +15,8 @@ def eval_retrieval(model, loader, device, use_wandb=True, epoch=None):
                   X-SPA (audio_source <-> text_space; space一致)
       さらに Chance@K と Excess@K (= R@K - Chance@K) を出す
     """
-    model.eval()
-    bufs = {"t_spa":[], "a_spa":[], "t_src":[], "a_src":[], "ids_src":[], "ids_spa":[]}
-    for batch in loader:
-        if batch is None: 
-            continue
-        audio = {k: torch.stack([d[k] for d in batch["audio"]]).to(device)
-                 for k in ("i_act","i_rea","omni_48k")}
-        texts = batch["texts"]
-        out = model(audio, texts)
-        bufs["t_spa"].append(out["text_space_emb"].detach().cpu())
-        bufs["a_spa"].append(out["audio_space_emb"].detach().cpu())
-        bufs["t_src"].append(out["text_source_emb"].detach().cpu())
-        bufs["a_src"].append(out["audio_source_emb"].detach().cpu())
-        bufs["ids_src"].append(batch["source_id"].reshape(-1).cpu())
-        bufs["ids_spa"].append(batch["space_id"].reshape(-1).cpu())
-
-    # 連結
-    for k in bufs:
-        bufs[k] = torch.cat(bufs[k], dim=0)
-
-    a_src, t_src, ids_src = bufs["a_src"], bufs["t_src"], bufs["ids_src"]
-    a_spa, t_spa, ids_spa = bufs["a_spa"], bufs["t_spa"], bufs["ids_spa"]
+    ids_src = src_lb
+    ids_spa = spa_lb
 
     # ---- chance の計算（multi-positiveの理論当たり確率） ----
     def _chance_at_k(query_ids, gallery_ids, ks=(1,5,10)):

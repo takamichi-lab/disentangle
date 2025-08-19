@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 import random, wandb, math, sys, yaml
 from utils.metrics import invariance_ratio
-
+from tqdm.auto import tqdm
 from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
 from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
 from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval              # 追加②
@@ -17,13 +17,14 @@ import torchaudio, torch
 from functools import lru_cache
 from dataset.audio_rir_dataset import foa_to_iv, FOA_SR, IV_SR  # 既存実装を再利用:contentReference[oaicite:15]{index=15}
 
-def _aformat_to_foa(wet):  # wet: [4,T] A-format -> FOA (W,Y,Z,X)
-    m0, m1, m2, m3 = wet[0], wet[1], wet[2], wet[3]
+
+def _aformat_to_foa(wet_b):  # wet: [4,T] A-format -> FOA (W,Y,Z,X)
+    m0, m1, m2, m3 = wet_b[:,0], wet_b[:,1], wet_b[:,2], wet_b[:,3]
     W = (m0+m1+m2+m3)/2; X = (m0+m1-m2-m3)/2
     Y = (m0-m1+m2-m3)/2; Z = (m0-m1-m2+m3)/2
-    return torch.stack([W, Y, Z, X], dim=0)
+    return torch.stack([W, Y, Z, X], dim=1)
 
-@lru_cache(maxsize=4096)
+
 def _load_rir_cpu_cached(path: str):
     rir, sr = torchaudio.load(path)  # [4,Tr] A-format
     return rir, sr
@@ -66,19 +67,15 @@ def _build_audio_from_defer(audio_list, device):
 
     # 3) GPUでFFT畳み込み（A-format）→ FOA 変換
     wet_a = _fft_convolve_batch_gpu(drys, rirs)                 # [B,4,T]
-    foa   = torch.stack([_aformat_to_foa(w) for w in wet_a], dim=0)  # [B,4,T]
+    foa   = _aformat_to_foa(wet_a) # [B,4,T]
     omni_48k = foa[:, 0, :]
 
-    # 4) 16kへリサンプル（環境により CPU 実装のため安全に .cpu() へ）
-    foa_16k = torchaudio.functional.resample(foa.detach().cpu(), orig_freq=FOA_SR, new_freq=IV_SR)
-
+    # 4) 16kへリサンプル（環境により GPU 前処理）
+    with torch.no_grad():
+        foa_16k = torchaudio.functional.resample(foa, orig_freq=FOA_SR, new_freq=IV_SR)
     # 5) foa_to_iv（deviceに従ってCUDA/CPUで実行可。ここではCPUでも十分高速）:contentReference[oaicite:17]{index=17}
-    i_act_list, i_rea_list = [], []
-    for b in range(foa_16k.size(0)):
-        i_act, i_rea = foa_to_iv(foa_16k[b].unsqueeze(0))  # (1,3,F,Tfrm)
-        i_act_list.append(i_act.squeeze(0)); i_rea_list.append(i_rea.squeeze(0))
-    i_act = torch.stack(i_act_list, dim=0)
-    i_rea = torch.stack(i_rea_list, dim=0)
+
+        i_act, i_rea = foa_to_iv(foa_16k) 
 
     return {"i_act": i_act.to(device, non_blocking=True),
             "i_rea": i_rea.to(device, non_blocking=True),
@@ -211,7 +208,7 @@ def physical_loss(model_output, batch_data, isNorm=True, dataloader=None,stats =
             "loss_reverb": loss_reverb.item()}, total
 
 def recursive_to(obj, device):
-    if isinstance(obj, torch.Tensor): return obj.to(device)
+    if isinstance(obj, torch.Tensor): return obj.to(device, non_blocking=True)
     if isinstance(obj, dict):  return {k: recursive_to(v, device) for k,v in obj.items()}
     if isinstance(obj, list):  return [recursive_to(v, device) for v in obj]
     return obj
@@ -219,17 +216,20 @@ def recursive_to(obj, device):
 
 
 def main():
+    torch.backends.cuda.matmul.allow_tf32 =False 
+    torch.backends.cudnn.allow_tf32 =False
+    torch.backends.cudnn.benchmark = False  # 可変長でなければ有効
     cfg = load_config()
-    if cfg["wandb"] and cfg["run_name"] is not None:
-        wandb.init(project=cfg["proj"], name=cfg["run_name"], config=cfg, save_code=True, mode="online")
+    if cfg["wandb"]:
+        wandb.init(project=cfg["proj"], config=cfg, save_code=True, mode="online")
     elif cfg["wandb"]:
         wandb.init(project=cfg["proj"], config=cfg, save_code=True, mode="online")
     # -------- Train loader (従来通り) --------
     train_ds = AudioRIRDataset(csv_audio=cfg["audio_csv_train"], base_dir=cfg["audio_base"],
                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
                                split=cfg["split"], batch_size=cfg["batch_size"])
-    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=4,
-                          collate_fn=collate_fn, pin_memory=False)
+    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=6,
+                          collate_fn=collate_fn, pin_memory=True, persistent_workers=True,prefetch_factor=2)
     train_stats = {
         "area_mean": train_ds.area_mean, "area_std": train_ds.area_std,
         "dist_mean": train_ds.dist_mean, "dist_std": train_ds.dist_std,
@@ -247,9 +247,13 @@ def main():
     # -------- Model / Optim --------
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
     opt   = torch.optim.AdamW(model.parameters(), lr=cfg["lr"])
-    for ep in range(1, cfg["epochs"]+1):
+    use_amp = bool(cfg.get("use_amp", True))
+    scaler = torch.amp.GradScaler(enabled=use_amp)
+    epoch_bar = tqdm(range(1, cfg["epochs"]+1), desc="Epochs", unit="ep", dynamic_ncols=True)
+    for ep in epoch_bar:
         model.train()
-        for step, batch in enumerate(train_dl, 1):
+        train_bar = tqdm(enumerate(train_dl, 1),total=len(train_dl), desc="Training", unit="batch", dynamic_ncols=True)
+        for step, batch in train_bar:
             if batch is None: continue
             audio_list = batch["audio"]
 
@@ -262,23 +266,33 @@ def main():
             texts  = batch["texts"]
             src_lb = batch["source_id"].reshape(-1).to(cfg["device"])
             spa_lb = batch["space_id"].reshape(-1).to(cfg["device"])
+            with torch.autocast(cfg["device"], enabled=use_amp):
+                out = model(audio, texts)
+                a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
+                t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
+                a_src  = F.normalize(out["audio_source_emb"], dim=-1)
+                t_src  = F.normalize(out["text_source_emb"],  dim=-1)
+                logit_s = out["logit_scale"]
 
-            out = model(audio, texts)
-            a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
-            t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
-            a_src  = F.normalize(out["audio_source_emb"], dim=-1)
-            t_src  = F.normalize(out["text_source_emb"],  dim=-1)
-            logit_s = out["logit_scale"]
+                loss_space  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s, exclude_diag=cfg.get("exclude_diag", True))
+                loss_source = sup_contrast(a_src, t_src, src_lb, logit_s, exclude_diag=cfg.get("exclude_diag", True))
+                phys_log, phys_loss = physical_loss(out, batch_data, isNorm=True, dataloader=train_dl)
 
-            loss_space  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
-            loss_source = sup_contrast(a_src, t_src, src_lb, logit_s)
-            phys_log, phys_loss = physical_loss(out, batch_data, isNorm=True, dataloader=train_dl)
-
-            loss = loss_space + loss_source + phys_loss
-            opt.zero_grad(); loss.backward(); opt.step()
+                loss = loss_space + loss_source + phys_loss
+            opt.zero_grad(set_to_none=True)
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
+            if step % 1 == 0:
+                train_bar.set_postfix(
+                    space=float(loss_space.detach().cpu()),
+                    src=float(loss_source.detach().cpu()),
+                    phys=float(phys_loss.detach().cpu()),
+                    mean=float(loss.detach().cpu())
+                )
 
             if step % 10 == 0:
-                print(f"Epoch {ep} Step {step}/{len(train_dl)}  space={loss_space:.4f}  src={loss_source:.4f}")
+                tqdm.write(f"Epoch {ep} Step {step}/{len(train_dl)}  space={loss_space:.4f}  src={loss_source:.4f}")
                 if cfg["wandb"]:
                     wandb.log({"loss/space": loss_space.item(), "loss/source": loss_source.item(),
                                "loss/physical": phys_loss.item(), "loss/dir": phys_log["loss_dir"],
@@ -286,30 +300,39 @@ def main():
                                "loss/reverb": phys_log["loss_reverb"], "logit_scale": out["logit_scale"].item(),
                                "loss/mean": loss.item(), "epoch": ep, "step": step + (ep-1)*len(train_dl)})
 
-        # -------- Validation (Retrieval + 物理lossの平均) --------
+        # # -------- Validation (Retrieval + 物理lossの平均) --------
         model.eval()
+        
         val_losses = {"space":0.0,"source":0.0,"physical":0.0,"direction":0.0,"distance":0.0,"area":0.0,"reverb":0.0,"count":0}
-
+        buf = {"a_spa": [], "a_src": [], "t_spa": [], "t_src": [], "src_lb": [], "spa_lb": []}
         with torch.no_grad():
-            for batch in val_dl:
+            val_bar = tqdm(val_dl, total=len(val_dl), desc=f"Val   ep{ep}", unit="batch",
+                           leave=False, dynamic_ncols=True)
+            for batch in val_bar:
+
                 if batch is None: continue
                 batch_data = {k: recursive_to(v, cfg["device"]) for k, v in batch.items() if k not in ["audio","texts"]}
                 audio = {k: torch.stack([d[k] for d in batch["audio"]]).to(cfg["device"]) for k in ("i_act","i_rea","omni_48k")}
                 texts  = batch["texts"]
                 src_lb = batch["source_id"].reshape(-1).to(cfg["device"])
                 spa_lb = batch["space_id"].reshape(-1).to(cfg["device"])
+                with torch.autocast(cfg["device"], enabled=use_amp):
+                    out = model(audio, texts)
+                    a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
+                    t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
+                    a_src  = F.normalize(out["audio_source_emb"], dim=-1)
+                    t_src  = F.normalize(out["text_source_emb"],  dim=-1)
+                    logit_s = out["logit_scale"]
 
-                out = model(audio, texts)
-                a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
-                t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
-                a_src = F.normalize(out["audio_source_emb"], dim=-1)
-                t_src = F.normalize(out["text_source_emb"],  dim=-1)
-                logit_s = out["logit_scale"]
-
-                l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
-                l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s)
-                phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, dataloader=val_dl, stats=train_stats)
-
+                    l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
+                    l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s)
+                    phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, dataloader=val_dl, stats=train_stats)
+                    buf["a_spa"].append(a_spa.detach().float().cpu())
+                    buf["a_src"].append(a_src.detach().float().cpu())
+                    buf["t_spa"].append(t_spa.detach().float().cpu())
+                    buf["t_src"].append(t_src.detach().float().cpu())
+                    buf["src_lb"].append(src_lb.detach().cpu())
+                    buf["spa_lb"].append(spa_lb.detach().cpu())
                 val_losses["space"]    += l_sp.item()
                 val_losses["source"]   += l_sr.item()
                 val_losses["physical"] += l_phys.item()
@@ -318,12 +341,23 @@ def main():
                 val_losses["area"]     += phys_log["loss_area"]
                 val_losses["reverb"]   += phys_log["loss_reverb"]
                 val_losses["count"]    += 1
+                # ★ 検証のpostfix
+                val_bar.set_postfix(
+                    sp=float(val_losses["space"]/max(1,val_losses["count"])),
+                    sr=float(val_losses["source"]/max(1,val_losses["count"])),
+                    phys=float(val_losses["physical"]/max(1,val_losses["count"]))
+                )
 
+        A_SPA = torch.cat(buf["a_spa"], dim=0)
+        A_SRC = torch.cat(buf["a_src"], dim=0)
+        T_SPA = torch.cat(buf["t_spa"], dim=0)
+        T_SRC = torch.cat(buf["t_src"], dim=0)
+        SRC_LB = torch.cat(buf["src_lb"], dim=0)
+        SPA_LB = torch.cat(buf["spa_lb"], dim=0)
         n = max(1, val_losses["count"])
         val_mean = (val_losses["space"]/n + val_losses["source"]/n + val_losses["physical"]/n)
-        print(f"Epoch {ep}  [VAL] space={val_losses['space']/n:.4f}  src={val_losses['source']/n:.4f}  phys={val_losses['physical']/n:.4f}")
-        
-        mets = eval_retrieval(model, val_dl, cfg["device"], use_wandb=False, epoch=ep)
+        tqdm.write(f"Epoch {ep}  [VAL] space={val_losses['space']/n:.4f}  src={val_losses['source']/n:.4f}  phys={val_losses['physical']/n:.4f}")
+        mets = eval_retrieval(a_spa=A_SPA, a_src=A_SRC, t_spa=T_SPA, t_src=T_SRC, src_lb=SRC_LB, spa_lb=SPA_LB, device=cfg["device"], use_wandb=False, epoch=ep)
 
         if cfg["wandb"]:
             wandb.log({
@@ -338,16 +372,13 @@ def main():
                 "epoch": ep, **{f"val/{k}": v for k,v in mets.items()}
             })
                 
-        # audio側の分離
-        ir_a = invariance_ratio(a_spa, src_lb, spa_lb)   # emb=audio_space
-        # ここで ir_a["IR_space"] を見る（大きいほど良い）
-        ir_b = invariance_ratio(a_src, src_lb, spa_lb)   # emb=audio_source
-        # ここで ir_b["IR_source"] を見る（大きいほど良い）
 
-        # （任意）text側も見たい場合
-        ir_tspa = invariance_ratio(t_spa, src_lb, spa_lb)
-        ir_tsrc = invariance_ratio(t_src, src_lb, spa_lb)
 
+        ir_a = invariance_ratio(A_SPA, SRC_LB, SPA_LB) # audio_space
+        ir_b = invariance_ratio(A_SRC, SRC_LB, SPA_LB) # audio_source
+        ir_tspa = invariance_ratio(T_SPA, SRC_LB, SPA_LB) # text_space
+        ir_tsrc = invariance_ratio(T_SRC, SRC_LB, SPA_LB) # text_source
+        tqdm.write(f"[IR] audio_space={ir_a.get('IR_space', None)}  audio_source={ir_b.get('IR_source', None)}")
         # W&Bへ
         if cfg["wandb"]:
             wandb.log({
@@ -360,10 +391,11 @@ def main():
                 "epoch": ep,
             })
         # -------- checkpoint -------------
-        ckpt_dir = Path("checkpoints"); ckpt_dir.mkdir(exist_ok=True)
+        ckpt_dir = Path("Spatial_AudioCaps/takamichi09/checkpoints_delsa"); ckpt_dir.mkdir(exist_ok=True)
         torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "epoch": ep},
                    ckpt_dir/f"ckpt_sup_ep{ep}.pt")
-        print(f"[✓] Saved checkpoint for epoch {ep}")
+        tqdm.write(f"[✓] Saved checkpoint for epoch {ep}")
+    tqdm.write("[✓] Training loop finished.")
 
 if __name__ == "__main__":
     try:

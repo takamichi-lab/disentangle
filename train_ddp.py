@@ -10,15 +10,84 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from contextlib import nullcontext
 import wandb
-
+import torchaudio
 from utils.metrics import invariance_ratio
 from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn
 from dataset.precomputed_val_dataset import PrecomputedValDataset
 from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval
 from model.delsa_model import DELSA
-
+from
 random.seed(42)
 
+def _aformat_to_foa(wet):  # wet: [4,T] A-format -> FOA (W,Y,Z,X)
+    m0, m1, m2, m3 = wet[0], wet[1], wet[2], wet[3]
+    W = (m0+m1+m2+m3)/2; X = (m0+m1-m2-m3)/2
+    Y = (m0-m1+m2-m3)/2; Z = (m0-m1-m2+m3)/2
+    return torch.stack([W, Y, Z, X], dim=0)
+
+@lru_cache(maxsize=4096)
+def _load_rir_cpu_cached(path: str):
+    rir, sr = torchaudio.load(path)  # [4,Tr] A-format
+    return rir, sr
+
+def _fft_convolve_batch_gpu(dry_b, rir_b):  # [B,1,T],[B,4,Tr] -> [B,4,T]
+    if dry_b.size(1) == 1:
+        dry_b = dry_b.repeat(1,4,1)          # mono -> 4ch
+    n = dry_b.shape[-1] + rir_b.shape[-1] - 1
+    n_fft = 1 << (n - 1).bit_length()
+    D = torch.fft.rfft(dry_b, n_fft)         # CUDA対応のrFFT :contentReference[oaicite:16]{index=16}
+    R = torch.fft.rfft(rir_b, n_fft)
+    y = torch.fft.irfft(D * R, n_fft)[..., :n]
+    return y[..., :dry_b.shape[-1]]
+
+def _build_audio_from_defer(audio_list, device):
+    """Datasetから {dry, rir_path} を受け取り、GPUで畳み込み→FOA→16k→foa_to_iv までを実行。
+       戻り値は {"i_act","i_rea","omni_48k"} のテンソル（学習コードは無変更でOK）。"""
+    # 1) dry をまとめて GPU 転送
+    drys = torch.stack([a["dry"].squeeze(0) for a in audio_list]).unsqueeze(1).to(device, non_blocking=True)  # [B,1,T]
+
+    # 2) RIR をCPUキャッシュ→必要なら48kにresample→GPU転送
+    rirs_cpu = []
+    Tr_list = []
+    for a in audio_list:
+        rir, sr = _load_rir_cpu_cached(a["rir_path"])
+        rirs_cpu.append(rir if sr == FOA_SR else torchaudio.functional.resample(rir, sr, FOA_SR))
+        Tr_list.append(rir.shape[-1])
+
+        
+    Tr_max = max(Tr_list)                        # バッチ内の最大 RIR 長
+    pad_rirs = []
+    for rir in rirs_cpu:
+        pad = Tr_max - rir.shape[-1]
+        if pad > 0:
+            rir = torch.nn.functional.pad(rir, (0, pad))  # 末尾に 0 詰め（[4, Tr_max]）
+        pad_rirs.append(rir)
+
+
+    rirs = torch.stack(pad_rirs).to(device, non_blocking=True)  # [B,4,Tr]
+
+    # 3) GPUでFFT畳み込み（A-format）→ FOA 変換
+    wet_a = _fft_convolve_batch_gpu(drys, rirs)                 # [B,4,T]
+    foa   = torch.stack([_aformat_to_foa(w) for w in wet_a], dim=0)  # [B,4,T]
+    omni_48k = foa[:, 0, :]
+
+    # 4) 16kへリサンプル（環境により CPU 実装のため安全に .cpu() へ）
+    foa_16k = torchaudio.functional.resample(foa.detach().cpu(), orig_freq=FOA_SR, new_freq=IV_SR)
+
+    # 5) foa_to_iv（deviceに従ってCUDA/CPUで実行可。ここではCPUでも十分高速）:contentReference[oaicite:17]{index=17}
+    i_act_list, i_rea_list = [], []
+    for b in range(foa_16k.size(0)):
+        i_act, i_rea = foa_to_iv(foa_16k[b].unsqueeze(0))  # (1,3,F,Tfrm)
+        i_act_list.append(i_act.squeeze(0)); i_rea_list.append(i_rea.squeeze(0))
+    i_act = torch.stack(i_act_list, dim=0)
+    i_rea = torch.stack(i_rea_list, dim=0)
+
+    return {"i_act": i_act.to(device, non_blocking=True),
+            "i_rea": i_rea.to(device, non_blocking=True),
+            "omni_48k": omni_48k}  # omniは48kでそのままdevice上
+
+def _is_defer_format(audio_list):
+    return len(audio_list) > 0 and ("dry" in audio_list[0] and "rir_path" in audio_list[0])
 def _is_dist_initialized():
     return dist.is_available() and dist.is_initialized()
 
@@ -251,6 +320,12 @@ def main():
         opt.zero_grad(set_to_none=True)
         for step, batch in enumerate(train_dl, 1):
             if batch is None: continue
+            audio_list = batch["audio"]
+
+            if _is_defer_format(audio_list):
+                audio = _build_audio_from_defer(audio_list, cfg["device"]) 
+            else:
+                audio = {k: torch.stack([d[k] for d in batch["audio"]]).to(cfg["device"]) for k in ("i_act","i_rea","omni_48k")}
             batch_data = {k: recursive_to(v, device) for k, v in batch.items() if k not in ["audio","texts"]}
             src_lb = batch["source_id"].reshape(-1).to(device, non_blocking=True)
             spa_lb = batch["space_id"].reshape(-1).to(device, non_blocking=True)
@@ -287,7 +362,7 @@ def main():
                 scaler.update()
                 opt.zero_grad(set_to_none=True)
 
-            if step % 10 == 0 and _is_main_process():
+            if step % 2 == 0 and _is_main_process():
                 print(f"Epoch {ep} Step {step}/{len(train_dl)}  space={loss_space:.4f}  src={loss_source:.4f}")
                 if cfg["wandb"]:
                     wandb.log({

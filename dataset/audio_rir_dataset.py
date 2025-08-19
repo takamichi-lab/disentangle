@@ -7,6 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
 import numpy as np
 import soundfile   as sf
+from functools import lru_cache
 try:
     if torchaudio.get_audio_backend() != "sox_io":
         torchaudio.set_audio_backend("sox_io")
@@ -19,7 +20,21 @@ MAX_DURATION_SEC = 10.0
 FOA_SR = 48_000      # FOA / omni target SR
 IV_SR  = 16_000      # intensity-vector SR
 
+@lru_cache(maxsize=16)
+def _cached_hann(n_fft: int, device_str: str):
+    return torch.hann_window(n_fft, device=torch.device(device_str))
 
+@lru_cache(maxsize=8192)   # メモリに余裕があれば大きめでも可
+def _load_dry_cached(path: str):
+    wav, sr = torchaudio.load(path)
+    if sr != FOA_SR:
+        wav = torchaudio.functional.resample(wav, sr, FOA_SR)
+    if wav.shape[-1] < int(FOA_SR*MAX_DURATION_SEC):
+        rpt = math.ceil(FOA_SR*MAX_DURATION_SEC / wav.shape[1])
+        wav = wav.repeat(1, rpt)[:, : int(FOA_SR*MAX_DURATION_SEC)]
+    else:
+        wav = wav[:, : int(FOA_SR*MAX_DURATION_SEC)]
+    return wav
 
 #random.seed(5)  # 再現性のため
 
@@ -59,7 +74,7 @@ def foa_to_iv(
 ):
     B, C, T = foa_wave.shape
     assert C == 4, "FOA wav must be (B,4,T)"
-    win = torch.hann_window(n_fft, device=foa_wave.device)
+    win = _cached_hann(n_fft, str(foa_wave.device))
     spec = (
         torch.stft(
             foa_wave.view(-1, T),

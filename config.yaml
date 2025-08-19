@@ -11,17 +11,21 @@ out_dir: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_
 SpatialAudio_csv_val: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio 
 
 # 前計算Valの場所（precompute_val.py の out_dir）
+
+
 val_precomp_root: Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio
 val_index_csv:    Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio/val_precomputed.csv   # 省略可（rootからの既定を使う）
 val_batch_size: 64
 
+exclude_diag: True  
+use_amp: True
 audio_base: AudioCaps_mp3 
-batch_size: 8
-n_views: 8
+batch_size: 24
+n_views: 3
 val_n_views: 24
-epochs: 50
+epochs: 40
 lr: 0.0001
 device: auto            # "auto" → cuda if available
 wandb: true
 proj: delsa-sup-contrast
-run_name: None
+run_name: 8/17 3:58
