@@ -320,9 +320,12 @@ def main():
                 loss = loss_space_w + loss_source_w + loss_phys_w
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
+            prev_scale = scaler.get_scale()
             scaler.step(opt)
             scaler.update()
-            scheduler.step()
+            # オーバーフローが起きると scale が下がる → その時は scheduler を回さない
+            if scaler.get_scale() >= prev_scale:   # つまり今回 step できた
+                scheduler.step()
             if step % 10 == 0:
                 train_bar.set_postfix(
                     space=float(loss_space.detach().cpu()),
