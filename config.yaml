@@ -1,20 +1,17 @@
-
 #train
 audio_csv_train: AudioCaps_csv/train.csv 
 rir_csv_train:   RIR_dataset/rir_catalog_train.csv
 
 # val
-audio_csv_val: val_fixed_400x24/audio_fixed.csv      # 省略可
-rir_csv_val: val_fixed_400x24/rir_fixed.csv        # 省略可
-out_dir: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio 
+audio_csv_val: val_fixed_96x96/audio_fixed.csv      # 省略可
+rir_csv_val: val_fixed_96x96/rir_fixed.csv        # 省略可
+out_dir: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio_val 
 #予め作っておく クラスタ分散とMIG用
 SpatialAudio_csv_val: /home/takamichi-lab-pc09/DELSA/Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio 
 
 # 前計算Valの場所（precompute_val.py の out_dir）
-
-
-val_precomp_root: Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio
-val_index_csv:    Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio/val_precomputed.csv   # 省略可（rootからの既定を使う）
+val_precomp_root: Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio_val
+val_index_csv:    Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio_val/val_precomputed.csv   # 省略可（rootからの既定を使う）
 val_batch_size: 64
 
 exclude_diag: True  
@@ -22,10 +19,18 @@ use_amp: True
 audio_base: AudioCaps_mp3 
 batch_size: 24
 n_views: 3
-val_n_views: 24
+val_n_views: 96
 epochs: 40
-lr: 0.0001
+lr: 0.00005
 device: auto            # "auto" → cuda if available
 wandb: true
 proj: delsa-sup-contrast
 run_name: 8/17 3:58
+# 追加
+audio_base_pcm: AudioCaps_pcm48k # ← 上の out-root を指定
+prefer_pcm: true # ← wav があれば優先
+
+
+use_compile: true
+compile_mode: reduce-overhead   # or max-autotune
+compile_dynamic: true

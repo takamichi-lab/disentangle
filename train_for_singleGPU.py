@@ -17,14 +17,22 @@ import torchaudio, torch
 from functools import lru_cache
 from dataset.audio_rir_dataset import foa_to_iv, FOA_SR, IV_SR  # 既存実装を再利用:contentReference[oaicite:15]{index=15}
 
+_M_A2FOA = torch.tensor([
+    [0.5, 0.5, 0.5, 0.5],  # W
+    [0.5, -0.5, 0.5, -0.5],  # Y
+    [0.5, -0.5, -0.5, 0.5],  # Z
+    [0.5, 0.5, -0.5, -0.5],  # X
+], dtype=torch.float32)  # [4,4] A-format -> FOA変換行列
+# def _aformat_to_foa(wet_b):  # wet: [4,T] A-format -> FOA (W,Y,Z,X)
+#     m0, m1, m2, m3 = wet_b[:,0], wet_b[:,1], wet_b[:,2], wet_b[:,3]
+#     W = (m0+m1+m2+m3)/2; X = (m0+m1-m2-m3)/2
+#     Y = (m0-m1+m2-m3)/2; Z = (m0-m1-m2+m3)/2
+#     return torch.stack([W, Y, Z, X], dim=1)
 
-def _aformat_to_foa(wet_b):  # wet: [4,T] A-format -> FOA (W,Y,Z,X)
-    m0, m1, m2, m3 = wet_b[:,0], wet_b[:,1], wet_b[:,2], wet_b[:,3]
-    W = (m0+m1+m2+m3)/2; X = (m0+m1-m2-m3)/2
-    Y = (m0-m1+m2-m3)/2; Z = (m0-m1-m2+m3)/2
-    return torch.stack([W, Y, Z, X], dim=1)
-
-
+def _aformat_to_foa(wet_b):  # wet_b: [B,4,T] A-format -> FOA (W,Y,Z,X)
+    if wet_b.size(1) != 4:
+        raise ValueError(f"wet_b must have 4 channels (A-format), but got {wet_b.size(1)} channels.")
+    return torch.einsum('ij,bjt->bit', _M_A2FOA.to(wet_b.device, wet_b.dtype), wet_b)
 def _load_rir_cpu_cached(path: str):
     rir, sr = torchaudio.load(path)  # [4,Tr] A-format
     return rir, sr
@@ -67,7 +75,7 @@ def _build_audio_from_defer(audio_list, device):
 
     # 3) GPUでFFT畳み込み（A-format）→ FOA 変換
     wet_a = _fft_convolve_batch_gpu(drys, rirs)                 # [B,4,T]
-    foa   = _aformat_to_foa(wet_a) # [B,4,T]
+    foa   = _aformat_to_foa(wet_a).contiguous() # [B,4,T]
     omni_48k = foa[:, 0, :]
 
     # 4) 16kへリサンプル（環境により GPU 前処理）
@@ -129,7 +137,7 @@ def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude
     - exclude_diag=True のときは、対角 (i,i) を【分子・分母の両方】から外す（完全一貫）。
       False のときは対角を分子・分母の両方に含める（同一インスタンス正例を含める）。
     """
-    a = F.normalize(a, dim=1); b = F.normalize(b, dim=1)
+    a = F.normalize(a, dim=-1, eps=eps); b = F.normalize(b, dim=-1, eps = eps)
 
     # CLIP式のlogスケールを渡しているならこちらを使う：
     # scale = torch.clamp(logit_scale, max=math.log(1e2)).exp()
@@ -177,7 +185,7 @@ def sup_contrast(a, b, labels, logit_scale, eps=1e-8, *, symmetric=True, exclude
         return 0.5 * (loss_t2a + _dir_loss(logits_a2t))
     return loss_t2a
 
-def physical_loss(model_output, batch_data, isNorm=True, dataloader=None,stats = None):
+def physical_loss(model_output, batch_data, isNorm=True,stats = None):
     if isNorm:
         pred = {"direction": model_output["direction"], "area": model_output["area"],
                 "distance": model_output["distance"], "reverb": model_output["reverb"]}
@@ -227,9 +235,10 @@ def main():
     # -------- Train loader (従来通り) --------
     train_ds = AudioRIRDataset(csv_audio=cfg["audio_csv_train"], base_dir=cfg["audio_base"],
                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
-                               split=cfg["split"], batch_size=cfg["batch_size"])
-    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=6,
-                          collate_fn=collate_fn, pin_memory=True, persistent_workers=True,prefetch_factor=2)
+                               split=cfg["split"], batch_size=cfg["batch_size"],
+                               pcm_base_dir=cfg.get("audio_base_pcm"), prefer_pcm=cfg.get("prefer_pcm", False)) 
+    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=2,
+                          collate_fn=collate_fn, pin_memory=True, persistent_workers=False,prefetch_factor=1)
     train_stats = {
         "area_mean": train_ds.area_mean, "area_std": train_ds.area_std,
         "dist_mean": train_ds.dist_mean, "dist_std": train_ds.dist_std,
@@ -246,10 +255,34 @@ def main():
 
     # -------- Model / Optim --------
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
-    opt   = torch.optim.AdamW(model.parameters(), lr=cfg["lr"])
+    log_vars = torch.nn.Parameter(torch.zeros(3, device=cfg["device"]))
+    # --- torch.compile（全体を包む／推奨） ---
+    use_compile = cfg.get("use_compile", True)
+    compile_mode = cfg.get("compile_mode", "reduce-overhead")   # small batchならこれ、計算重めなら "max-autotune"
+    compile_dynamic = cfg.get("compile_dynamic", True)
+
+    if use_compile:
+        try:
+            model = torch.compile(
+                model,
+                backend="inductor",
+                mode=compile_mode,
+                dynamic=compile_dynamic,
+                fullgraph=False,   # Trueにすると壊れやすいのでまずはFalse
+            )
+            print(f"[torch.compile] enabled: backend=inductor, mode={compile_mode}, dynamic={compile_dynamic}")
+            compiled = True
+        except Exception as e:
+            print(f"[torch.compile] fallback to eager: {e}")
+            compiled = False
+    opt = torch.optim.AdamW(
+        [{"params": model.parameters()}, {"params": [log_vars], "lr": cfg["lr"]}],
+        lr=cfg["lr"]
+    )
     use_amp = bool(cfg.get("use_amp", True))
     scaler = torch.amp.GradScaler(enabled=use_amp)
     epoch_bar = tqdm(range(1, cfg["epochs"]+1), desc="Epochs", unit="ep", dynamic_ncols=True)
+    exclude_diag = cfg.get("exclude_diag", True)
     for ep in epoch_bar:
         model.train()
         train_bar = tqdm(enumerate(train_dl, 1),total=len(train_dl), desc="Training", unit="batch", dynamic_ncols=True)
@@ -268,17 +301,20 @@ def main():
             spa_lb = batch["space_id"].reshape(-1).to(cfg["device"])
             with torch.autocast(cfg["device"], enabled=use_amp):
                 out = model(audio, texts)
-                a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
-                t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
-                a_src  = F.normalize(out["audio_source_emb"], dim=-1)
-                t_src  = F.normalize(out["text_source_emb"],  dim=-1)
+                a_spa  = F.normalize(out["audio_space_emb"], dim = -1)
+                t_spa  = F.normalize(out["text_space_emb"], dim = -1)
+                a_src  = F.normalize(out["audio_source_emb"], dim = -1)
+                t_src  = F.normalize(out["text_source_emb"], dim = -1)
                 logit_s = out["logit_scale"]
 
-                loss_space  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s, exclude_diag=cfg.get("exclude_diag", True))
-                loss_source = sup_contrast(a_src, t_src, src_lb, logit_s, exclude_diag=cfg.get("exclude_diag", True))
-                phys_log, phys_loss = physical_loss(out, batch_data, isNorm=True, dataloader=train_dl)
-
-                loss = loss_space + loss_source + phys_loss
+                loss_space = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s, exclude_diag=exclude_diag)
+                loss_source = sup_contrast(a_src, t_src, src_lb, logit_s, exclude_diag=exclude_diag)
+                phys_log, phys_loss = physical_loss(out, batch_data, isNorm=True, stats=train_stats)
+                w = torch.exp(-log_vars)  # [3]
+                loss_space_w  = w[0] * loss_space  + log_vars[0]
+                loss_source_w = w[1] * loss_source + log_vars[1]
+                loss_phys_w   = w[2] * phys_loss   + log_vars[2]
+                loss = loss_space_w + loss_source_w + loss_phys_w
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             scaler.step(opt)
@@ -318,15 +354,15 @@ def main():
                 spa_lb = batch["space_id"].reshape(-1).to(cfg["device"])
                 with torch.autocast(cfg["device"], enabled=use_amp):
                     out = model(audio, texts)
-                    a_spa  = F.normalize(out["audio_space_emb"],  dim=-1)
-                    t_spa  = F.normalize(out["text_space_emb"],   dim=-1)
-                    a_src  = F.normalize(out["audio_source_emb"], dim=-1)
-                    t_src  = F.normalize(out["text_source_emb"],  dim=-1)
+                    a_spa  = F.normalize(out["audio_space_emb"], dim = -1)
+                    t_spa  = F.normalize(out["text_space_emb"], dim = -1)
+                    a_src  = F.normalize(out["audio_source_emb"], dim = -1)
+                    t_src  = F.normalize(out["text_source_emb"], dim = -1)
                     logit_s = out["logit_scale"]
 
                     l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
                     l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s)
-                    phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, dataloader=val_dl, stats=train_stats)
+                    phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, stats=train_stats)
                     buf["a_spa"].append(a_spa.detach().float().cpu())
                     buf["a_src"].append(a_src.detach().float().cpu())
                     buf["t_spa"].append(t_spa.detach().float().cpu())
