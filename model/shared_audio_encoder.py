@@ -29,17 +29,18 @@ class HTSAT(nn.Module):
         # その中から、HTSAT本体（768次元出力）だけをクラスのプロパティとして保持する
         self.model = full_model.audio_model
         # ▲▲▲ 変更ここまで ▲▲▲
-        
+   
     def forward(self, omni_wave: torch.Tensor) -> torch.Tensor:
         """
         omni_wave: Tensor の形状は (B, L)
         戻り値: Tensor of shape (B, 768)
         """
+        omni_cpu = omni_wave.detach().to("cpu")  # CPUに移動
         # ... (ここから下のforwardメソッドの中身は一切変更ありません) ...
         batch_size = omni_wave.size(0)
         raw_list: List[np.ndarray] = []
         for i in range(batch_size):
-            wave_i = omni_wave[i].cpu().numpy()
+            wave_i = omni_cpu[i].numpy()
             raw_list.append(wave_i)
 
         inputs = self.processor(
@@ -50,10 +51,10 @@ class HTSAT(nn.Module):
             truncation="max_length",
             max_length=480_000
         )
-        
-        device = omni_wave.device
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-        
+
+        model_device = next(self.model.parameters()).device
+        inputs = {k: v.to(model_device) for k, v in inputs.items()}
+
         outputs = self.model(**inputs)
         
         return outputs.pooler_output

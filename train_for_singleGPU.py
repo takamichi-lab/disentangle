@@ -76,7 +76,7 @@ def _build_audio_from_defer(audio_list, device):
     # 3) GPUでFFT畳み込み（A-format）→ FOA 変換
     wet_a = _fft_convolve_batch_gpu(drys, rirs)                 # [B,4,T]
     foa   = _aformat_to_foa(wet_a).contiguous() # [B,4,T]
-    omni_48k = foa[:, 0, :]
+    omni_48k = foa[:, 0, :].detach().to("cpu")
 
     # 4) 16kへリサンプル（環境により GPU 前処理）
     with torch.no_grad():
@@ -256,28 +256,28 @@ def main():
     # -------- Model / Optim --------
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
     log_vars = torch.nn.Parameter(torch.zeros(3, device=cfg["device"]))
-    # --- torch.compile（全体を包む／推奨） ---
-    use_compile = cfg.get("use_compile", True)
-    compile_mode = cfg.get("compile_mode", "reduce-overhead")   # small batchならこれ、計算重めなら "max-autotune"
-    compile_dynamic = cfg.get("compile_dynamic", True)
-
-    if use_compile:
-        try:
-            model = torch.compile(
-                model,
-                backend="inductor",
-                mode=compile_mode,
-                dynamic=compile_dynamic,
-                fullgraph=False,   # Trueにすると壊れやすいのでまずはFalse
-            )
-            print(f"[torch.compile] enabled: backend=inductor, mode={compile_mode}, dynamic={compile_dynamic}")
-            compiled = True
-        except Exception as e:
-            print(f"[torch.compile] fallback to eager: {e}")
-            compiled = False
     opt = torch.optim.AdamW(
-        [{"params": model.parameters()}, {"params": [log_vars], "lr": cfg["lr"]}],
+        [{"params": model.parameters(), "weight_decay": 0.01},
+        {"params": [log_vars], "lr": cfg["lr"], "weight_decay": 0.0}],
         lr=cfg["lr"]
+    )
+    total_steps = cfg["epochs"] * len(train_dl)
+    warmup_steps = max(1, int(0.05 * total_steps))   # 5% warmup（3–10%で調整）
+    hold   = int(0.30 * total_steps)
+    min_lr_ratio = 0.3                               # 最終LR = 初期LRの30%
+    def lr_lambda(step):
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        if step < warmup_steps + hold:
+            return 1.0
+        prog = (step - warmup_steps - hold) / max(1, total_steps - warmup_steps - hold)
+        return min_lr_ratio + (1 - min_lr_ratio) * 0.5 * (1 + math.cos(math.pi * prog))
+
+    
+    # Scheduler（log_vars は一定LRに固定したい場合の例）
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        opt,
+        lr_lambda=[lr_lambda, lambda step: 1.0]  # [model用, log_vars用]
     )
     use_amp = bool(cfg.get("use_amp", True))
     scaler = torch.amp.GradScaler(enabled=use_amp)
@@ -293,8 +293,11 @@ def main():
             if _is_defer_format(audio_list):
                 audio = _build_audio_from_defer(audio_list, cfg["device"]) 
             else:
-                audio = {k: torch.stack([d[k] for d in batch["audio"]]).to(cfg["device"]) for k in ("i_act","i_rea","omni_48k")}
-
+                audio = {
+                    "i_act": torch.stack([d["i_act"] for d in batch["audio"]]).to(cfg["device"]),
+                    "i_rea": torch.stack([d["i_rea"] for d in batch["audio"]]).to(cfg["device"]),
+                    "omni_48k": torch.stack([d["omni_48k"] for d in batch["audio"]])  # ★ CPU
+                }
             batch_data = {k: recursive_to(v, cfg["device"]) for k, v in batch.items() if k not in ["audio","texts"]}
             texts  = batch["texts"]
             src_lb = batch["source_id"].reshape(-1).to(cfg["device"])
@@ -319,7 +322,8 @@ def main():
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
-            if step % 1 == 0:
+            scheduler.step()
+            if step % 10 == 0:
                 train_bar.set_postfix(
                     space=float(loss_space.detach().cpu()),
                     src=float(loss_source.detach().cpu()),

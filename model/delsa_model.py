@@ -17,7 +17,7 @@ class DELSA(nn.Module):
         super().__init__()
         # Audio/Textエンコーダをインスタンス化
         shared_dim = 512
-        out_space_dim = 256 
+        out_space_dim = 512 
         out_source_dim = 512
         # 共有用のaudio Encoder
         self.audio_encoder = AudioEncoder(**audio_encoder_cfg)
@@ -83,6 +83,7 @@ class DELSA(nn.Module):
 
         # logit_scale = self.logit_scale
         logit_scale_exp = self.logit_scale.clamp(max=math.log(1e2)).exp()
+        tau = 1.0 / logit_scale_exp
         # --- 出力を辞書形式でまとめる ---
         # ここで、各埋め込みと物理量の予測を辞書にまとめて返す
         # これにより、モデルの出力を簡単に扱えるようにする
@@ -97,6 +98,6 @@ class DELSA(nn.Module):
             "direction": direction,                # 方向の予測 (B, 2)
             "area": area,                          # 面積の予測 (B, 1)
             "distance": distance,                  # 距離の予測 (B, 1)
-            "reverb": reverb                       # 残響時間の予測 (B, 1)
-
+            "reverb": reverb,                       # 残響時間の予測 (B, 1)
+            "tau": tau                          # 温度パラメータ
         }
