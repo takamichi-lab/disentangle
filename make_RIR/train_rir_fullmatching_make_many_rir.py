@@ -83,9 +83,9 @@ def build_targets(per_combo: int, split: str):
 # ───── 4) メイン ─────
 def main():
     BASE  = Path("RIR_dataset")
-    SPLIT = "train"      # "train"/"val"/"test"
-    SEED  = 40
-    PER_COMBO = 2      # ★ 各コンボにつき何個作るか
+    SPLIT = "test"      # "train"/"val"/"test"
+    SEED  = 4
+    PER_COMBO = 1      # ★ 各コンボにつき何個作るか
     MAX_ATTEMPTS = 1_000_0000
 
     random.seed(SEED)

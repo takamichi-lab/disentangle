@@ -11,12 +11,75 @@ from dataset.audio_rir_dataset import AudioRIRDataset, collate_fn   # 既存
 from dataset.precomputed_val_dataset import PrecomputedValDataset   # 追加①
 from utils.metrics import cosine_sim, recall_at_k, recall_at_k_multi, eval_retrieval              # 追加②
 from model.delsa_model import DELSA                                # ← 修正
-
+from dataset.precomputed_val_dataset import PrecomputedValDataset
+from utils.catesian_sampler import CartesianBatchSampler
+import torch, re
 random.seed(42)
 import torchaudio, torch
 from functools import lru_cache
 from dataset.audio_rir_dataset import foa_to_iv, FOA_SR, IV_SR  # 既存実装を再利用:contentReference[oaicite:15]{index=15}
+import os
 
+
+def _pick_sd(obj):
+    if isinstance(obj, dict):
+        for k in ("model_state_dict", "state_dict", "model"):
+            if k in obj and isinstance(obj[k], dict):
+                return obj[k]
+    return obj
+
+def _strip_module(sd):
+    return { (k.replace("module.", "", 1) if k.startswith("module.") else k): v for k,v in sd.items() }
+
+def _load_prefix(mod, full_sd, prefix, strict=False, tag=""):
+    sub = { k[len(prefix):]: v for k,v in full_sd.items() if k.startswith(prefix) }
+    if not sub:
+        return 0
+    missing, unexpected = mod.load_state_dict(sub, strict=strict)
+    print(f"[load]{tag or prefix}: loaded={len(sub)} missing={len(missing)} unexpected={len(unexpected)}")
+    return len(sub)
+
+def load_backbones_only(model, pt_path, device="cpu", strict=False) -> bool:
+    """戻り値: 何かしらロードできたらTrue（=初期重みとして使えた）"""
+    if not pt_path or not os.path.isfile(pt_path):
+        print(f"[load] baseline checkpoint not found: {pt_path} (skip)")
+        return False
+    sd = _strip_module(_pick_sd(torch.load(pt_path, map_location=device)))
+    n_loaded = 0
+
+    # Text backbone (RoBERTa)
+    if hasattr(model, "text_encoder") and hasattr(model.text_encoder, "roberta"):
+        for pref in ("text_encoder.roberta.", "roberta."):
+            n_loaded += _load_prefix(model.text_encoder.roberta, sd, pref, strict=strict, tag="text.roberta")
+
+    # Audio backbones (HTSAT & Spatial)
+    if hasattr(model, "audio_encoder"):
+        # HTSAT は shared_audio_encoder.HTSAT 内で self.model に本体が入る実装
+        for attr, prefs in [
+            ("htsat", ("audio_encoder.htsat.model.", "audio_encoder.htsat.", "htsat.model.", "htsat.")),
+            ("spatial_branch", ("audio_encoder.spatial_branch.", "spatial_branch.")),
+        ]:
+            if hasattr(model.audio_encoder, attr):
+                n_loaded += sum(_load_prefix(getattr(model.audio_encoder, attr), sd, p, strict=strict,
+                                             tag=f"audio.{attr}") for p in prefs)
+
+    print(f"[load] total loaded tensors: {n_loaded}")
+    return n_loaded > 0
+
+def freeze_module(m):
+    for p in m.parameters(): p.requires_grad = False
+
+def maybe_init_from_baseline(model, ckpt_path, device, freeze_if_loaded=True) -> bool:
+    """ckptが読めた場合のみ凍結。読めなければ何もしない。戻り値: 読めたかどうか"""
+    loaded = load_backbones_only(model, ckpt_path, device=device, strict=False)
+    if loaded and freeze_if_loaded:
+        if hasattr(model, "text_encoder") and hasattr(model.text_encoder, "roberta"):
+            freeze_module(model.text_encoder.roberta)
+        if hasattr(model, "audio_encoder"):
+            if hasattr(model.audio_encoder, "htsat"):           freeze_module(model.audio_encoder.htsat)
+            if hasattr(model.audio_encoder, "spatial_branch"):  freeze_module(model.audio_encoder.spatial_branch)
+        print("[freeze] backbones are frozen (because baseline was loaded).")
+    return loaded
 _M_A2FOA = torch.tensor([
     [0.5, 0.5, 0.5, 0.5],  # W
     [0.5, -0.5, 0.5, -0.5],  # Y
@@ -250,14 +313,36 @@ def main():
     if not val_csv or not Path(val_csv).exists():
         raise SystemExit(f"[ERR] val_precomputed.csv が見つかりません: {val_csv}")
     val_ds = PrecomputedValDataset(index_csv=val_csv, rir_meta_csv=cfg["rir_csv_val"], root=val_root)
-    val_dl = DataLoader(val_ds, batch_size=cfg.get("val_batch_size", cfg["batch_size"]),
-                        shuffle=False, num_workers=4, collate_fn=collate_fn, pin_memory=False)
+    dry_per_batch  = cfg.get("val_dry_per_batch", 24)
+    rirs_per_batch = cfg.get("val_rirs_per_batch", 3)
+    batch_sampler = CartesianBatchSampler(
+        index_csv=val_csv,
+        dry_per_batch=dry_per_batch,
+        rirs_per_batch=rirs_per_batch,
+        drop_last = False,
+        shuffle_audio = False,
+        shuffle_rir = False,
+        seed = 0,
+    )
+    val_dl = DataLoader(val_ds, batch_sampler=batch_sampler, num_workers=4, collate_fn=collate_fn, pin_memory=False)
 
     # -------- Model / Optim --------
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
+    
     log_vars = torch.nn.Parameter(torch.zeros(3, device=cfg["device"]))
+    loaded = maybe_init_from_baseline(
+        model,
+        cfg.get("baseline_ckpt_path"),
+        device=cfg["device"],
+        freeze_if_loaded=cfg.get("freeze_backbones_if_baseline_loaded", True),
+    )
+
+    base_params = (filter(lambda p: p.requires_grad, model.parameters())
+                if (loaded and cfg.get("freeze_backbones_if_baseline_loaded", True))
+                else model.parameters())
+
     opt = torch.optim.AdamW(
-        [{"params": model.parameters(), "weight_decay": 0.01},
+        [{"params": base_params, "weight_decay": 0.01},
         {"params": [log_vars], "lr": cfg["lr"], "weight_decay": 0.0}],
         lr=cfg["lr"]
     )
@@ -367,8 +452,8 @@ def main():
                     t_src  = F.normalize(out["text_source_emb"], dim = -1)
                     logit_s = out["logit_scale"]
 
-                    l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s)
-                    l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s)
+                    l_sp  = sup_contrast(a_spa,  t_spa,  spa_lb, logit_s, exclude_diag=exclude_diag)
+                    l_sr  = sup_contrast(a_src, t_src, src_lb, logit_s, exclude_diag=exclude_diag)
                     phys_log, l_phys = physical_loss(out, batch_data, isNorm=False, stats=train_stats)
                     buf["a_spa"].append(a_spa.detach().float().cpu())
                     buf["a_src"].append(a_src.detach().float().cpu())
@@ -425,10 +510,14 @@ def main():
         # W&Bへ
         if cfg["wandb"]:
             wandb.log({
-                "IR/audio_space":  ir_a["IR_space"],
-                "IR/audio_source": ir_b["IR_source"],
-                "IR/text_space":   ir_tspa["IR_space"],
-                "IR/text_source":  ir_tsrc["IR_source"],
+                "IR/Z_audio_space/IR_Space":  ir_a["IR_space"],
+                "IR/Z_audio_space/IR_source": ir_a["IR_source"],
+                "IR/Z_audio_source/IR_Space": ir_b["IR_space"],
+                "IR/Z_audio_source/IR_source": ir_b["IR_source"],
+                "IR/Z_text_space/IR_Space":   ir_tspa["IR_space"],
+                "IR/Z_text_space/IR_source":  ir_tspa["IR_source"],
+                "IR/Z_text_source/IR_Space":  ir_tsrc["IR_space"],
+                "IR/Z_text_source/IR_source": ir_tsrc["IR_source"],
                 "IR/count_ss_ds":  ir_a["num_ss_ds"],
                 "IR/count_sd_ss":  ir_a["num_sd_ss"],
                 "epoch": ep,
