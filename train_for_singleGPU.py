@@ -300,7 +300,7 @@ def main():
                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
                                split=cfg["split"], batch_size=cfg["batch_size"],
                                pcm_base_dir=cfg.get("audio_base_pcm"), prefer_pcm=cfg.get("prefer_pcm", False)) 
-    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=2,
+    train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], shuffle=True, num_workers=8,
                           collate_fn=collate_fn, pin_memory=True, persistent_workers=False,prefetch_factor=1)
     train_stats = {
         "area_mean": train_ds.area_mean, "area_std": train_ds.area_std,
@@ -459,8 +459,8 @@ def main():
                     buf["a_src"].append(a_src.detach().float().cpu())
                     buf["t_spa"].append(t_spa.detach().float().cpu())
                     buf["t_src"].append(t_src.detach().float().cpu())
-                    buf["src_lb"].append(src_lb.detach().cpu())
-                    buf["spa_lb"].append(spa_lb.detach().cpu())
+                    buf["src_lb"].append(src_lb.detach().float().cpu())
+                    buf["spa_lb"].append(spa_lb.detach().float().cpu())
                 val_losses["space"]    += l_sp.item()
                 val_losses["source"]   += l_sr.item()
                 val_losses["physical"] += l_phys.item()
