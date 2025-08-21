@@ -19,7 +19,8 @@ import torchaudio, torch
 from functools import lru_cache
 from dataset.audio_rir_dataset import foa_to_iv, FOA_SR, IV_SR  # 既存実装を再利用:contentReference[oaicite:15]{index=15}
 import os
-
+import torchaudio
+torchaudio.set_audio_backend("sox_io")
 
 def _pick_sd(obj):
     if isinstance(obj, dict):
@@ -178,8 +179,13 @@ def load_config(path: str | None = None) -> dict:
         "epochs": 5,
         "lr": 0.0001,
         "device": "auto",
+        "resume_ckpt": None,
+        "wandb_id": None,
+        "ckpt_dir": None,
+        "save_every": 1,
         "wandb": True,
         "proj": "delsa-sup-contrast",
+        "ckpt_dir": "Spatial_AudioCaps/takamichi09/checkpoints_delsa_fromELSA",
         "run_name": None,
         # ↓ 追加（前計算Valの場所）
         "val_precomp_root": None,   # 例: "Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio"
@@ -292,9 +298,11 @@ def main():
     torch.backends.cudnn.benchmark = False  # 可変長でなければ有効
     cfg = load_config()
     if cfg["wandb"]:
-        wandb.init(project=cfg["proj"], config=cfg, save_code=True, mode="online")
-    elif cfg["wandb"]:
-        wandb.init(project=cfg["proj"], config=cfg, save_code=True, mode="online")
+        wandb.init(project=cfg["proj"],
+                   config=cfg, 
+                   save_code=True,
+                   id=cfg.get("wandb_id"),
+                   resume="allow" if cfg.get("wandb_id") else None)
     # -------- Train loader (従来通り) --------
     train_ds = AudioRIRDataset(csv_audio=cfg["audio_csv_train"], base_dir=cfg["audio_base"],
                                csv_rir=cfg["rir_csv_train"], n_views=cfg["n_views"],
@@ -367,6 +375,26 @@ def main():
     use_amp = bool(cfg.get("use_amp", True))
     scaler = torch.amp.GradScaler(enabled=use_amp)
     epoch_bar = tqdm(range(1, cfg["epochs"]+1), desc="Epochs", unit="ep", dynamic_ncols=True)
+    start_ep = 1
+    if cfg.get("resume_ckpt") and os.path.isfile(cfg["resume_ckpt"]):
+        ckpt = torch.load(cfg["resume_ckpt"], map_location=cfg["device"])
+        if "model" in ckpt: model.load_state_dict(ckpt["model"])
+        if "opt"   in ckpt: opt.load_state_dict(ckpt["opt"])
+        if "scaler" in ckpt:
+            try: scaler.load_state_dict(ckpt["scaler"])
+            except Exception: pass
+        prev_ep = int(ckpt.get("epoch", 0))
+        start_ep = prev_ep + 1
+        prev_steps = prev_ep * len(train_dl)
+        scheduler.last_epoch = max(-1, prev_steps - 1)
+        if cfg["wandb"]:
+            wandb.run.summary["resumed_from_epoch"] = prev_ep
+            wandb.run.summary["resumed_from_ckpt"] = cfg["resume_ckpt"]
+        tqdm.write(f"[↩] Resumed from {cfg['resume_ckpt']} (epoch {prev_ep}), next epoch = {start_ep}")
+    else: 
+        if cfg["resume_ckpt"]:
+            tqdm.write(f"[ERR] Resume checkpoint not found: {cfg['resume_ckpt']}")
+    epoch_bar = tqdm(range(start_ep, cfg["epochs"]+1), desc="Epochs", unit="ep", dynamic_ncols=True)
     exclude_diag = cfg.get("exclude_diag", True)
     for ep in epoch_bar:
         model.train()
@@ -523,10 +551,12 @@ def main():
                 "epoch": ep,
             })
         # -------- checkpoint -------------
-        ckpt_dir = Path("Spatial_AudioCaps/takamichi09/checkpoints_delsa"); ckpt_dir.mkdir(exist_ok=True)
-        torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "epoch": ep},
-                   ckpt_dir/f"ckpt_sup_ep{ep}.pt")
-        tqdm.write(f"[✓] Saved checkpoint for epoch {ep}")
+        ckpt_dir = Path(cfg.get("ckpt_dir", "Spatial_AudioCaps/takamichi09/checkpoints_delsa_fromELSA"))
+        ckpt_dir.mkdir(exist_ok=True, parents=True)
+        if (ep % int(cfg.get("save_every", 1))) == 0:
+            torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "epoch": ep},
+                       ckpt_dir/f"ckpt_sup_ep{ep}.pt")
+            tqdm.write(f"[✓] Saved checkpoint for epoch {ep}")
     tqdm.write("[✓] Training loop finished.")
 
 if __name__ == "__main__":
