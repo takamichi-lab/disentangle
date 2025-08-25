@@ -191,6 +191,7 @@ def load_config(path: str | None = None) -> dict:
         "val_precomp_root": None,   # 例: "Spatial_AudioCaps/takamichi09/for_delsa_spatialAudio"
         "val_index_csv":    None,   # 例: 上記/root/val_precomputed.csv（未指定なら root を使う）
         "val_batch_size":   16,
+        "disable_physics_loss": False,
     }
 
     for k, v in defaults.items():
@@ -338,16 +339,17 @@ def main():
     model = DELSA(audio_encoder_cfg={}, text_encoder_cfg={}).to(cfg["device"])
     
     log_vars = torch.nn.Parameter(torch.zeros(3, device=cfg["device"]))
+
     loaded = maybe_init_from_baseline(
-        model,
-        cfg.get("baseline_ckpt_path"),
-        device=cfg["device"],
-        freeze_if_loaded=cfg.get("freeze_backbones_if_baseline_loaded", True),
+            model,
+            cfg.get("baseline_ckpt_path"),
+            device=cfg["device"],
+            freeze_if_loaded=cfg.get("freeze_backbones_if_baseline_loaded", True),
     )
 
     base_params = (filter(lambda p: p.requires_grad, model.parameters())
-                if (loaded and cfg.get("freeze_backbones_if_baseline_loaded", True))
-                else model.parameters())
+                    if (loaded and cfg.get("freeze_backbones_if_baseline_loaded", True))
+                    else model.parameters())
 
     opt = torch.optim.AdamW(
         [{"params": base_params, "weight_decay": 0.01},
@@ -429,8 +431,11 @@ def main():
                 w = torch.exp(-log_vars)  # [3]
                 loss_space_w  = w[0] * loss_space  + log_vars[0]
                 loss_source_w = w[1] * loss_source + log_vars[1]
-                loss_phys_w   = w[2] * phys_loss   + log_vars[2]
-                loss = loss_space_w + loss_source_w + loss_phys_w
+                if cfg.get("disable_physics_loss", False):
+                    loss = loss_space_w + loss_source_w
+                else:
+                    loss_phys_w   = w[2] * phys_loss   + log_vars[2]
+                    loss = loss_space_w + loss_source_w + loss_phys_w
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             prev_scale = scaler.get_scale()

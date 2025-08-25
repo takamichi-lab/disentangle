@@ -43,9 +43,10 @@ prefer_pcm: true # ← wav があれば優先
 
 # baseline_ckpt_path: Spatial_AudioCaps/takamichi09/elsa_ckck_0711/elsa_epoch_30.pt
 # freeze_backbones_if_baseline_loaded: true
-
-wandb_id: 50topfkq     # 既存runのID（重要）
-resume_ckpt: Spatial_AudioCaps/takamichi09/checkpoints_delsa/ckpt_sup_ep9.pt
-ckpt_dir: Spatial_AudioCaps/takamichi09/checkpoints_delsa
+# 既存設定の末尾などに追加
+disable_physics_loss: true
+wandb_id: fg321sj4     # 既存runのID（重要）
+resume_ckpt: Spatial_AudioCaps/takamichi09/checkpoints_delsa_notPhysLoss/ckpt_sup_ep19.pt
+ckpt_dir: Spatial_AudioCaps/takamichi09/checkpoints_delsa_notPhysLoss
 save_every: 1              # 何エポックごとに保存するか
 #epochs: 20                 # 「最終到達エポック」を指定（例：20まで回す）
