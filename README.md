@@ -1,8 +1,25 @@
-# DELSA: 音源と音響空間を分離した音–テキスト対照学習
+## Mapping from Physical Metadata to Language Descriptors
 
+This figure shows the **rule set used to convert physical spatial metadata into natural language descriptors** when extending a dataset from **monaural audio with captions** to **4-channel spatial audio with spatialized captions**.  
+<p align="center">
+  <img src="meta2language.PNG" alt="Mapping from physical metadata to language descriptors" width="480">
+</p>
+
+# Notice
+This repository is **not the official release**.  
+The content is written in **Japanese** and is still **under development / incomplete**.  
+A complete and fully maintained version (including the final code and English documentation) will be released publicly in the near future.
+
+
+
+
+# DISSE: 音源と音響空間を分離した音–テキスト対照学習
+
+![meta2language](meta2language.PNG)
 > 本リポジトリは **"DELSA: Disentangling Source and Acoustic Space in Audio–Text Contrastive Learning"** のPyTorch実装です。
 
 ---
+
 
 ## 概要
 
