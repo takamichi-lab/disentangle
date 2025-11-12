@@ -8,7 +8,7 @@ as it provides important information not included in the paper.
 ## Mapping from Physical Metadata to Language Descriptors
 This figure shows the **rule set used to convert physical spatial metadata into natural language descriptors** when extending a dataset from **monaural audio with captions** to **4-channel spatial audio with spatialized captions**.  
 <p align="center">
-  <img src="meta2language.PNG" alt="Mapping from physical metadata to language descriptors" width="320">
+  <img src="meta2language.PNG" alt="Mapping from physical metadata to language descriptors" width="380">
 </p>
 
 
