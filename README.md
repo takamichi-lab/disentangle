@@ -17,8 +17,6 @@ This figure shows the **rule set used to convert physical spatial metadata into 
 
 
 
-> 本リポジトリは **"DELSA: Disentangling Source and Acoustic Space in Audio–Text Contrastive Learning"** のPyTorch実装です。
-
 ---
 
 
