@@ -1,4 +1,4 @@
-# DISSE:  LEARNING DISENTANGLED SOURCE AND SPATIAL REPRESENTATIONS FROM SPATIAL AUDIO–TEXT CONTRASTIVE LEARNING
+# DISSE:  Learning Disentangled Source And Spatial Representations From Spatial Audio–Text Contrastive Learning
 # Notice
 This repository is not the official release.  
 The content is written in Japanese and is still under development / incomplete.  
