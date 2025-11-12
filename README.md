@@ -1,7 +1,7 @@
 # DISSE:  LEARNING DISENTANGLED SOURCE AND SPATIAL REPRESENTATIONS FROM SPATIAL AUDIO–TEXT CONTRASTIVE LEARNING
 # Notice
-This repository is **not the official release**.  
-The content is written in **Japanese** and is still **under development / incomplete**.  
+This repository is not the official release.  
+The content is written in Japanese and is still under development / incomplete.  
 A complete and fully maintained version (including the final code and English documentation) will be released publicly in the near future. However, please refer to the **table below ("Mapping from Physical Metadata to Language Descriptors")**,  
 as it provides important information not included in the paper.
 
