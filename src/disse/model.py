@@ -9,7 +9,7 @@ all learned tensors are restored from the released DISSE checkpoint.
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from typing import Iterable, Sequence
 
 import numpy as np
 import torch
@@ -215,35 +215,69 @@ class DISSE(nn.Module):
         self,
         audio_encoder_cfg: dict | None = None,
         text_encoder_cfg: dict | None = None,
+        *,
+        modalities: Iterable[str] = ("audio", "text"),
     ) -> None:
         super().__init__()
+        selected = frozenset(modalities)
+        invalid = sorted(selected - {"audio", "text"})
+        if invalid:
+            raise ValueError(f"Unknown model modalities: {', '.join(invalid)}")
+        if not selected:
+            raise ValueError("At least one model modality is required")
+        self.modalities = selected
         shared_dim = 512
         output_dim = 512
-        self.audio_encoder = AudioEncoder(**(audio_encoder_cfg or {}))
-        self.audio_space_head = nn.Sequential(
-            nn.ELU(), nn.Linear(shared_dim, output_dim)
-        )
-        self.audio_source_head = nn.Sequential(
-            nn.ELU(), nn.Linear(shared_dim, output_dim)
-        )
-        self.text_encoder = TextEncoder(**(text_encoder_cfg or {}))
-        self.text_space_head = nn.Sequential(
-            nn.ELU(), nn.Linear(shared_dim, output_dim)
-        )
-        self.text_source_head = nn.Sequential(
-            nn.ELU(), nn.Linear(shared_dim, output_dim)
-        )
+        if "audio" in selected:
+            self.audio_encoder = AudioEncoder(**(audio_encoder_cfg or {}))
+            self.audio_space_head = nn.Sequential(
+                nn.ELU(), nn.Linear(shared_dim, output_dim)
+            )
+            self.audio_source_head = nn.Sequential(
+                nn.ELU(), nn.Linear(shared_dim, output_dim)
+            )
+        else:
+            self.audio_encoder = None
+            self.audio_space_head = None
+            self.audio_source_head = None
+        if "text" in selected:
+            self.text_encoder = TextEncoder(**(text_encoder_cfg or {}))
+            self.text_space_head = nn.Sequential(
+                nn.ELU(), nn.Linear(shared_dim, output_dim)
+            )
+            self.text_source_head = nn.Sequential(
+                nn.ELU(), nn.Linear(shared_dim, output_dim)
+            )
+        else:
+            self.text_encoder = None
+            self.text_space_head = None
+            self.text_source_head = None
         self.logit_scale = nn.Parameter(
             torch.tensor(np.log(1 / 0.07), dtype=torch.float32)
         )
-        self.direction_head = RegressionHead_for_physicalValue(output_dim, 2)
-        self.area_head = RegressionHead_for_physicalValue(output_dim, 1)
-        self.distance_head = RegressionHead_for_physicalValue(output_dim, 1)
-        self.reverb_head = RegressionHead_for_physicalValue(output_dim, 1)
+        if "audio" in selected:
+            self.direction_head = RegressionHead_for_physicalValue(output_dim, 2)
+            self.area_head = RegressionHead_for_physicalValue(output_dim, 1)
+            self.distance_head = RegressionHead_for_physicalValue(output_dim, 1)
+            self.reverb_head = RegressionHead_for_physicalValue(output_dim, 1)
+        else:
+            self.direction_head = None
+            self.area_head = None
+            self.distance_head = None
+            self.reverb_head = None
 
-    def forward(
-        self, audio_data: dict[str, torch.Tensor], text_data: Sequence[str]
+    def encode_audio(
+        self, audio_data: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
+        """Encode audio without evaluating the text branch."""
+        if self.audio_encoder is None:
+            raise RuntimeError("This DISSE instance has no audio branch")
+        assert self.audio_space_head is not None
+        assert self.audio_source_head is not None
+        assert self.direction_head is not None
+        assert self.area_head is not None
+        assert self.distance_head is not None
+        assert self.reverb_head is not None
         audio_shared = self.audio_encoder(
             i_act=audio_data["i_act"],
             i_rea=audio_data["i_rea"],
@@ -251,19 +285,37 @@ class DISSE(nn.Module):
         )
         audio_spatial = self.audio_space_head(audio_shared)
         audio_source = self.audio_source_head(audio_shared)
-        text_shared = self.text_encoder(text_data)
-        text_spatial = self.text_space_head(text_shared)
-        text_source = self.text_source_head(text_shared)
-        scale = self.logit_scale.clamp(max=math.log(100.0)).exp()
         return {
             "audio_space_emb": audio_spatial,
             "audio_source_emb": audio_source,
-            "text_space_emb": text_spatial,
-            "text_source_emb": text_source,
-            "logit_scale": scale,
             "direction": self.direction_head(audio_spatial),
             "area": self.area_head(audio_spatial),
             "distance": self.distance_head(audio_spatial),
             "reverb": self.reverb_head(audio_spatial),
+        }
+
+    def encode_text(self, text_data: Sequence[str]) -> dict[str, torch.Tensor]:
+        """Encode text without evaluating the audio branch."""
+        if self.text_encoder is None:
+            raise RuntimeError("This DISSE instance has no text branch")
+        assert self.text_space_head is not None
+        assert self.text_source_head is not None
+        text_shared = self.text_encoder(text_data)
+        text_spatial = self.text_space_head(text_shared)
+        text_source = self.text_source_head(text_shared)
+        return {
+            "text_space_emb": text_spatial,
+            "text_source_emb": text_source,
+        }
+
+    def forward(
+        self, audio_data: dict[str, torch.Tensor], text_data: Sequence[str]
+    ) -> dict[str, torch.Tensor]:
+        """Encode a paired batch for training and cross-modal evaluation."""
+        scale = self.logit_scale.clamp(max=math.log(100.0)).exp()
+        return {
+            **self.encode_audio(audio_data),
+            **self.encode_text(text_data),
+            "logit_scale": scale,
             "tau": 1.0 / scale,
         }

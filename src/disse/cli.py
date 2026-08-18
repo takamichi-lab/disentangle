@@ -75,10 +75,16 @@ def _build_parser() -> argparse.ArgumentParser:
     download.add_argument("--force", action="store_true")
 
     infer = subparsers.add_parser("infer", help="Extract DISSE embeddings")
-    source = infer.add_mutually_exclusive_group(required=True)
+    source = infer.add_mutually_exclusive_group()
     source.add_argument("--manifest", help="CSV manifest for batch inference")
     source.add_argument("--audio", help="One four-channel FOA WAV file")
-    infer.add_argument("--text", help="Caption for --audio")
+    infer.add_argument("--text", help="One caption, optionally paired with --audio")
+    infer.add_argument(
+        "--modality",
+        choices=("auto", "audio", "text", "both"),
+        default="auto",
+        help="Embedding branch to run (default: infer from inputs; manifests use both)",
+    )
     infer.add_argument("--feature", help="Optional precomputed .pt for --audio")
     infer.add_argument("--source-id", default="single-source")
     infer.add_argument("--spatial-id", default="single-spatial")
@@ -127,6 +133,43 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _infer_modalities(args: argparse.Namespace) -> tuple[str, ...]:
+    if args.modality == "auto":
+        if args.manifest:
+            selected = ("audio", "text")
+        else:
+            selected = tuple(
+                modality
+                for modality, value in (("audio", args.audio), ("text", args.text))
+                if value
+            )
+    elif args.modality == "both":
+        selected = ("audio", "text")
+    else:
+        selected = (args.modality,)
+
+    if not selected:
+        raise SystemExit("infer requires --manifest, --audio, or --text")
+    if args.manifest:
+        if args.text:
+            raise SystemExit("--text cannot be combined with --manifest")
+        if args.feature:
+            raise SystemExit("--feature can only be used with --audio")
+        return selected
+
+    if "audio" in selected and not args.audio:
+        raise SystemExit("audio inference requires --audio")
+    if "text" in selected and not args.text:
+        raise SystemExit("text inference requires --text")
+    if args.audio and "audio" not in selected:
+        raise SystemExit("--audio was provided but audio inference is disabled")
+    if args.text and "text" not in selected:
+        raise SystemExit("--text was provided but text inference is disabled")
+    if args.feature and not args.audio:
+        raise SystemExit("--feature can only be used with --audio")
+    return selected
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     if args.command == "download":
@@ -172,14 +215,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.command == "infer":
         from .embed import ManifestItem, encode_items, load_manifest
 
+        modalities = _infer_modalities(args)
         if args.manifest:
-            items = load_manifest(args.manifest, data_root=args.data_root)
+            items = load_manifest(
+                args.manifest,
+                data_root=args.data_root,
+                require_audio="audio" in modalities,
+                require_text="text" in modalities,
+            )
         else:
-            if not args.text:
-                raise SystemExit("--text is required with --audio")
             items = [
                 ManifestItem(
-                    audio_path=Path(args.audio),
+                    audio_path=Path(args.audio) if args.audio else None,
                     feature_path=Path(args.feature) if args.feature else None,
                     text=args.text,
                     source_id=args.source_id,
@@ -195,6 +242,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             amp=args.amp,
             strict=not args.no_strict,
             model_cache_dir=args.model_cache_dir,
+            modalities=modalities,
         )
         print(f"Wrote {output}")
         return

@@ -24,3 +24,21 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: disse demo-cache --output /tmp/demo.npz
       - run: disse evaluate /tmp/demo.npz --iidr-only --output /tmp/metrics.json
+
+  modality-independence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: >-
+          python -m pip install
+          --index-url https://download.pytorch.org/whl/cpu
+          torch==2.7.0
+      - run: python -m pip install -e . transformers==4.52.4
+      - run: >-
+          python -m unittest discover -s tests
+          -p 'test_model_modalities.py' -v

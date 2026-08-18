@@ -132,13 +132,14 @@ def compute_iidr(
 
 
 def iidr_report(cache: Mapping[str, np.ndarray]) -> dict[str, dict[str, float | int]]:
-    """Compute Table-I-style IIDR values for all four DISSE embeddings."""
+    """Compute Table-I-style IIDR values for every available embedding."""
     data = validate_embedding_cache(cache)
     source_ids = data["source_id"]
     spatial_ids = data["spatial_id"]
     return {
         key: compute_iidr(data[key], source_ids, spatial_ids)
         for key in EMBEDDING_KEYS
+        if key in data
     }
 
 
@@ -253,57 +254,68 @@ def evaluate_embedding_cache(
 
     src = data["source_id"]
     spa = data["spatial_id"]
-    both = _joint_ids(src, spa)
-    audio_both = np.concatenate(
-        (data["audio_source"], data["audio_spatial"]), axis=1
-    )
-    text_both = np.concatenate(
-        (data["text_source"], data["text_spatial"]), axis=1
-    )
+    available = set(data).intersection(EMBEDDING_KEYS)
 
-    output["cross_modal"] = {
-        "on_task_source": _bidirectional(
+    cross_modal: dict[str, object] = {}
+    if {"audio_source", "text_source"} <= available:
+        cross_modal["on_task_source"] = _bidirectional(
             data["text_source"], data["audio_source"], src,
             ks=ks, chunk_size=chunk_size,
-        ),
-        "on_task_spatial": _bidirectional(
-            data["text_spatial"], data["audio_spatial"], spa,
-            ks=ks, chunk_size=chunk_size,
-        ),
-        "off_task_source": _bidirectional(
-            data["text_spatial"], data["audio_spatial"], src,
-            ks=ks, chunk_size=chunk_size,
-        ),
-        "off_task_spatial": _bidirectional(
+        )
+        cross_modal["off_task_spatial"] = _bidirectional(
             data["text_source"], data["audio_source"], spa,
             ks=ks, chunk_size=chunk_size,
-        ),
-        "both": _bidirectional(
+        )
+    if {"audio_spatial", "text_spatial"} <= available:
+        cross_modal["on_task_spatial"] = _bidirectional(
+            data["text_spatial"], data["audio_spatial"], spa,
+            ks=ks, chunk_size=chunk_size,
+        )
+        cross_modal["off_task_source"] = _bidirectional(
+            data["text_spatial"], data["audio_spatial"], src,
+            ks=ks, chunk_size=chunk_size,
+        )
+    if set(EMBEDDING_KEYS) <= available:
+        both = _joint_ids(src, spa)
+        audio_both = np.concatenate(
+            (data["audio_source"], data["audio_spatial"]), axis=1
+        )
+        text_both = np.concatenate(
+            (data["text_source"], data["text_spatial"]), axis=1
+        )
+        cross_modal["both"] = _bidirectional(
             text_both, audio_both, both, ks=ks, chunk_size=chunk_size
-        ),
-    }
+        )
+    if cross_modal:
+        output["cross_modal"] = cross_modal
 
     intra: dict[str, object] = {}
     for modality in ("audio", "text"):
-        source_emb = data[f"{modality}_source"]
-        spatial_emb = data[f"{modality}_spatial"]
-        intra[modality] = {
-            "on_task_source": retrieval_metrics(
+        source_key = f"{modality}_source"
+        spatial_key = f"{modality}_spatial"
+        modality_metrics: dict[str, object] = {}
+        if source_key in available:
+            source_emb = data[source_key]
+            modality_metrics["on_task_source"] = retrieval_metrics(
                 source_emb, source_emb, src, src, ks=ks,
                 exclude_diagonal=True, chunk_size=chunk_size,
-            ),
-            "on_task_spatial": retrieval_metrics(
-                spatial_emb, spatial_emb, spa, spa, ks=ks,
-                exclude_diagonal=True, chunk_size=chunk_size,
-            ),
-            "off_task_source": retrieval_metrics(
-                spatial_emb, spatial_emb, src, src, ks=ks,
-                exclude_diagonal=True, chunk_size=chunk_size,
-            ),
-            "off_task_spatial": retrieval_metrics(
+            )
+            modality_metrics["off_task_spatial"] = retrieval_metrics(
                 source_emb, source_emb, spa, spa, ks=ks,
                 exclude_diagonal=True, chunk_size=chunk_size,
-            ),
-        }
-    output["intra_modal"] = intra
+            )
+        if spatial_key in available:
+            spatial_emb = data[spatial_key]
+            modality_metrics["on_task_spatial"] = retrieval_metrics(
+                spatial_emb, spatial_emb, spa, spa, ks=ks,
+                exclude_diagonal=True, chunk_size=chunk_size,
+            )
+            modality_metrics["off_task_source"] = retrieval_metrics(
+                spatial_emb, spatial_emb, src, src, ks=ks,
+                exclude_diagonal=True, chunk_size=chunk_size,
+            )
+        if modality_metrics:
+            intra[modality] = modality_metrics
+    if intra:
+        output["intra_modal"] = intra
     return output

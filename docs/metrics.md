@@ -42,3 +42,7 @@ because successful disentanglement suppresses the non-target factor.
 
 Similarity is evaluated in query chunks, so the 9,216-item grid does not
 require retaining the complete similarity matrix.
+
+For a single-modality cache, IIDR and the corresponding intra-modal retrieval
+tasks are still computed. Cross-modal tasks are omitted unless matching audio
+and text embeddings are both present.
