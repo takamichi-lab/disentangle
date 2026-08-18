@@ -1,0 +1,2 @@
+audio_path,feature_path,text,source_id,spatial_id
+foa/example.wav,features/example.pt,A dog barking from the left in a small room,source_000,space_000

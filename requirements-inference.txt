@@ -1,0 +1,9 @@
+# Install the PyTorch build suitable for your system first if the default wheel
+# is not appropriate: https://pytorch.org/get-started/locally/
+numpy==1.26.4
+gdown>=5.2,<6
+soundfile==0.13.1
+torch==2.7.0
+torchaudio==2.7.0
+tqdm==4.67.1
+transformers==4.52.4

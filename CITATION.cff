@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use DISSE, please cite the EUSIPCO 2026 paper."
+title: "DISSE: Learning Disentangled Source and Spatial Representations from Spatial Audio-Text Contrastive Learning"
+type: software
+license: MIT
+authors:
+  - family-names: Ueji
+    given-names: Shotaro
+  - family-names: Takamichi
+    given-names: Shinnosuke
+  - family-names: Yamaoka
+    given-names: Kouei
+repository-code: "https://github.com/takamichi-lab/disentangle"
+version: 0.1.0

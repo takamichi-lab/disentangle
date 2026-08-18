@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "disse-audio"
+version = "0.1.0"
+description = "Inference and evaluation code for DISSE spatial audio-text embeddings"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Shotaro Ueji"},
+  {name = "Shinnosuke Takamichi"},
+  {name = "Kouei Yamaoka"},
+]
+dependencies = [
+  "numpy==1.26.4",
+]
+
+[project.urls]
+Repository = "https://github.com/takamichi-lab/disentangle"
+
+[project.optional-dependencies]
+inference = [
+  "gdown>=5.2,<6",
+  "soundfile>=0.12,<1",
+  "torch==2.7.0",
+  "torchaudio==2.7.0",
+  "tqdm>=4.66,<5",
+  "transformers==4.52.4",
+]
+evaluation-data = [
+  "Cython==3.1.1",
+  "pyroomacoustics==0.8.4",
+  "scipy==1.15.3",
+  "soundfile>=0.12,<1",
+  "torch==2.7.0",
+  "torchaudio==2.7.0",
+  "tqdm>=4.66,<5",
+]
+
+[project.scripts]
+disse = "disse.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

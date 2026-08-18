@@ -1,0 +1,8 @@
+{
+  "checkpoint": {
+    "description": "DISSE checkpoint after epoch 20",
+    "url": "https://drive.google.com/file/d/1fyEWNrfZe6bfsPmHqppof_dHMWu_Skmc/view?usp=drive_link",
+    "sha256": "a38ffabd0db88e4d42335ef47895524bb3ebcc01ecd9a8cbf7ff555b40f98398",
+    "output": "checkpoints/disse_epoch20.pt"
+  }
+}

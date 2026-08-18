@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+
+# Downloaded artifacts and generated outputs
+checkpoints/
+data/
+results/
+*.npz
+*.pt
+*.pth
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
