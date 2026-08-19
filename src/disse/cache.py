@@ -15,7 +15,6 @@ EMBEDDING_KEYS = (
     "text_spatial",
 )
 LABEL_KEYS = ("source_id", "spatial_id")
-REQUIRED_KEYS = EMBEDDING_KEYS + LABEL_KEYS
 
 _ALIASES = {
     "audio_space": "audio_spatial",
@@ -37,12 +36,25 @@ def _canonicalize(data: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
     return result
 
 
-def validate_embedding_cache(data: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
-    """Validate and return a canonical in-memory cache."""
+def validate_embedding_cache(
+    data: Mapping[str, np.ndarray], *, require_all_embeddings: bool = False
+) -> dict[str, np.ndarray]:
+    """Validate a full or single-modality embedding cache."""
     cache = _canonicalize(data)
-    missing = [key for key in REQUIRED_KEYS if key not in cache]
-    if missing:
-        raise ValueError(f"Embedding cache is missing keys: {', '.join(missing)}")
+    missing_labels = [key for key in LABEL_KEYS if key not in cache]
+    if missing_labels:
+        raise ValueError(
+            f"Embedding cache is missing keys: {', '.join(missing_labels)}"
+        )
+    available_embeddings = [key for key in EMBEDDING_KEYS if key in cache]
+    if not available_embeddings:
+        raise ValueError("Embedding cache contains no DISSE embeddings")
+    if require_all_embeddings:
+        missing = [key for key in EMBEDDING_KEYS if key not in cache]
+        if missing:
+            raise ValueError(
+                f"Embedding cache is missing keys: {', '.join(missing)}"
+            )
 
     n_items = int(np.asarray(cache["source_id"]).reshape(-1).shape[0])
     if n_items == 0:
@@ -53,7 +65,7 @@ def validate_embedding_cache(data: Mapping[str, np.ndarray]) -> dict[str, np.nda
     if cache["spatial_id"].shape[0] != n_items:
         raise ValueError("source_id and spatial_id have different lengths")
 
-    for key in EMBEDDING_KEYS:
+    for key in available_embeddings:
         emb = np.asarray(cache[key])
         if emb.ndim != 2:
             raise ValueError(f"{key} must be a 2-D array, got shape {emb.shape}")
@@ -87,10 +99,11 @@ def save_embedding_cache(
     """Validate and atomically save a portable ``.npz`` cache."""
     path = Path(path)
     cache = validate_embedding_cache(data)
+    keys = tuple(key for key in EMBEDDING_KEYS if key in cache) + LABEL_KEYS
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".part")
     writer = np.savez_compressed if compressed else np.savez
     with temporary.open("wb") as stream:
-        writer(stream, **{key: cache[key] for key in REQUIRED_KEYS})
+        writer(stream, **{key: cache[key] for key in keys})
     temporary.replace(path)
     return path

@@ -15,12 +15,27 @@ W&B logs, cached Python files, and obsolete implementations are excluded.
 
 ## Install
 
-Python 3.10-3.12 is supported. Install a PyTorch build appropriate for your
-CPU/CUDA environment, then install the inference dependencies:
+Python 3.10-3.12 is supported. Clone the repository and create an isolated
+environment:
+
+```bash
+git clone https://github.com/takamichi-lab/disentangle.git
+cd disentangle
+
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+If necessary, install PyTorch 2.7.0 and torchaudio 2.7.0 for your CPU/CUDA
+environment first. Then install the inference dependencies:
 
 ```bash
 python -m pip install -e ".[inference]"
 ```
+
+If `disse` is not available on `PATH`, use `python -m disse` in the commands
+below.
 
 The released experiment used PyTorch 2.7.0, torchaudio 2.7.0, and
 Transformers 4.52.4. A CUDA GPU is strongly recommended; CPU inference is
@@ -49,25 +64,49 @@ approximately 619 MiB. Inference expects
 SHA-256  a38ffabd0db88e4d42335ef47895524bb3ebcc01ecd9a8cbf7ff555b40f98398
 ```
 
-## Run inference on one FOA file
+## Run inference
 
 Input audio must be first-order Ambisonics in **W, Y, Z, X** channel order.
 Audio is resampled to 48 kHz and repeated/cropped to 10 seconds, matching the
 evaluation preprocessing.
 
-One audio-text pair:
+Audio-only inference evaluates only the audio branch:
 
 ```bash
 disse infer \
-  --audio example_foa.wav \
-  --text "A dog barking from the left in a reverberant room" \
+  --audio /path/to/your_foa.wav \
   --checkpoint checkpoints/disse_epoch20.pt \
-  --output results/example_embeddings.npz
+  --output results/audio_embeddings.npz
 ```
 
-The embedding cache contains:
+Text-only inference evaluates only the text branch:
 
-- `audio_source`, `audio_spatial`, `text_source`, `text_spatial`;
+```bash
+disse infer \
+  --text "A dog barking from the left in a reverberant room" \
+  --checkpoint checkpoints/disse_epoch20.pt \
+  --output results/text_embeddings.npz
+```
+
+Pass both inputs to extract all four embeddings in one invocation:
+
+```bash
+disse infer \
+  --audio /path/to/your_foa.wav \
+  --text "A dog barking from the left in a reverberant room" \
+  --checkpoint checkpoints/disse_epoch20.pt \
+  --output results/paired_embeddings.npz
+```
+
+Audio and text are encoded by separate inference methods; one input is never
+used to compute the other modality's embeddings. A single-modality command
+constructs and moves only that model branch to the selected device. The full
+checkpoint was nevertheless learned with cross-modal contrastive objectives.
+
+The embedding cache contains the selected modality's arrays:
+
+- audio: `audio_source`, `audio_spatial`;
+- text: `text_source`, `text_spatial`;
 - `source_id`, `spatial_id`.
 
 See [the data-format documentation](docs/data-format.md) for the public
@@ -108,6 +147,10 @@ disse evaluate \
   results/evaluation_embeddings.npz \
   --output results/evaluation_metrics.json
 ```
+
+Manifest inference uses both modalities by default. To compute audio IIDR
+without evaluating the text branch, add `--modality audio`. Use
+`--modality text` for text-only extraction.
 
 This pipeline is distilled from `make_balanced_rirs_by_category.py`,
 `make_val_fixed.py`, and `precompute_val.py` in the research repository. See
@@ -150,8 +193,9 @@ Tables II and III. Exact definitions are in [docs/metrics.md](docs/metrics.md).
 - Audio is four-channel FOA at 48 kHz and 10 seconds.
 - All four embeddings have dimension 512.
 - The released checkpoint is the standard DISSE model after epoch 20.
-- The model is loaded strictly by default; missing or unexpected checkpoint
-  keys are treated as errors.
+- Selected model branches are loaded strictly by default. Paired inference
+  checks the complete checkpoint; single-modality inference intentionally
+  ignores weights belonging only to the unselected branch.
 - The exact metadata-to-language lexicon is an implementation detail not
   specified in the paper. It is documented separately in
   [docs/caption-mapping.md](docs/caption-mapping.md).

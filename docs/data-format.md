@@ -16,15 +16,18 @@ clips in `evaluation/audio_fixed.csv`.
 The generated `manifest.csv` has one row per source-spatial pair:
 
 | Column | Required | Meaning |
-|---|---:|---|
-| `dry_path` | yes | Local dry clip path, relative to the manifest directory |
-| `rir_path` | yes | Four-channel A-format RIR path |
-| `text` | yes | Source-and-spatial caption supplied to DISSE |
+|---|---|---|
+| `dry_path` | for audio | Local dry clip path, relative to the manifest directory |
+| `rir_path` | for audio | Four-channel A-format RIR path |
+| `text` | for text | Source-and-spatial caption supplied to DISSE |
 | `source_id` | yes | Identifier shared by items with the same dry source |
 | `spatial_id` | yes | Identifier shared by items with the same RIR |
 
 Inference spatializes each pair on demand. A pre-spatialized manifest may
 instead provide `audio_path` (FOA WAV) and optional `feature_path`.
+`--modality audio` does not require `text`; `--modality text` does not require
+audio paths. The default `--modality auto` evaluates both branches for a
+manifest and therefore requires both inputs.
 
 For compatibility with precomputed research data, the loader also accepts:
 
@@ -84,16 +87,19 @@ from the FOA WAV using a 16-kHz STFT (`n_fft=400`, `hop_length=100`). When
 
 ## Embedding cache
 
-Inference produces a NumPy `.npz` file with six non-pickled arrays:
+Inference produces a NumPy `.npz` file containing the selected modality's
+embeddings plus two non-pickled label arrays:
 
-| Key | Shape |
-|---|---:|
-| `audio_source` | `[N, 512]` |
-| `audio_spatial` | `[N, 512]` |
-| `text_source` | `[N, 512]` |
-| `text_spatial` | `[N, 512]` |
-| `source_id` | `[N]` |
-| `spatial_id` | `[N]` |
+| Key | Present when | Shape |
+|---|---|---:|
+| `audio_source` | audio selected | `[N, 512]` |
+| `audio_spatial` | audio selected | `[N, 512]` |
+| `text_source` | text selected | `[N, 512]` |
+| `text_spatial` | text selected | `[N, 512]` |
+| `source_id` | always | `[N]` |
+| `spatial_id` | always | `[N]` |
 
 The evaluator accepts string or numeric labels and L2-normalizes all
-embeddings before computing distances and retrieval scores.
+embeddings before computing distances and retrieval scores. IIDR and
+intra-modal retrieval are computed for whichever modalities are present;
+cross-modal retrieval is reported only when both are available.

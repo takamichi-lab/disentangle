@@ -33,8 +33,9 @@ def load_checkpoint(
     map_location: str = "cpu",
     strict: bool = True,
     expected_epoch: int | None = None,
+    allow_unused_checkpoint_keys: bool = False,
 ) -> dict[str, Any]:
-    """Load a full DISSE checkpoint and return non-tensor metadata."""
+    """Load a full or selected-modality DISSE model and return metadata."""
     import torch
 
     path = Path(path)
@@ -50,6 +51,11 @@ def load_checkpoint(
         (key.removeprefix("module.") if key.startswith("module.") else key): value
         for key, value in state.items()
     }
+    ignored_keys: list[str] = []
+    if allow_unused_checkpoint_keys:
+        expected_keys = set(model.state_dict())
+        ignored_keys = sorted(set(state) - expected_keys)
+        state = {key: value for key, value in state.items() if key in expected_keys}
     incompatible = model.load_state_dict(state, strict=strict)
 
     epoch = checkpoint.get("epoch") if isinstance(checkpoint, dict) else None
@@ -60,4 +66,5 @@ def load_checkpoint(
         "epoch": int(epoch) if epoch is not None else None,
         "missing_keys": list(incompatible.missing_keys),
         "unexpected_keys": list(incompatible.unexpected_keys),
+        "ignored_keys": ignored_keys,
     }

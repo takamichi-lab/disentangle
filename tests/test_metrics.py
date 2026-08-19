@@ -2,7 +2,11 @@ import unittest
 
 import numpy as np
 
-from disse.metrics import compute_iidr, retrieval_metrics
+from disse.metrics import (
+    compute_iidr,
+    evaluate_embedding_cache,
+    retrieval_metrics,
+)
 
 
 class IIDRTests(unittest.TestCase):
@@ -89,6 +93,54 @@ class IIDRTests(unittest.TestCase):
             query, gallery, np.arange(4), np.arange(4), ks=(1,), chunk_size=2
         )
         self.assertEqual(result["MedR"], float(int(result["MedR"])))
+
+    def test_audio_only_cache_skips_cross_modal_metrics(self):
+        source, spatial = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")
+        source = source.reshape(-1)
+        spatial = spatial.reshape(-1)
+        cache = {
+            "audio_source": np.eye(3)[source] + 0.1 * np.eye(3)[spatial],
+            "audio_spatial": 0.1 * np.eye(3)[source] + np.eye(3)[spatial],
+            "source_id": source,
+            "spatial_id": spatial,
+        }
+
+        result = evaluate_embedding_cache(cache)
+
+        self.assertEqual(
+            set(result["iidr"]), {"audio_source", "audio_spatial"}
+        )
+        self.assertNotIn("cross_modal", result)
+        self.assertEqual(set(result["intra_modal"]), {"audio"})
+
+    def test_full_cache_retains_cross_modal_metrics(self):
+        source, spatial = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")
+        source = source.reshape(-1)
+        spatial = spatial.reshape(-1)
+        source_embedding = np.eye(3)[source] + 0.1 * np.eye(3)[spatial]
+        spatial_embedding = 0.1 * np.eye(3)[source] + np.eye(3)[spatial]
+        cache = {
+            "audio_source": source_embedding,
+            "audio_spatial": spatial_embedding,
+            "text_source": source_embedding,
+            "text_spatial": spatial_embedding,
+            "source_id": source,
+            "spatial_id": spatial,
+        }
+
+        result = evaluate_embedding_cache(cache)
+
+        self.assertEqual(
+            set(result["cross_modal"]),
+            {
+                "on_task_source",
+                "on_task_spatial",
+                "off_task_source",
+                "off_task_spatial",
+                "both",
+            },
+        )
+        self.assertEqual(set(result["intra_modal"]), {"audio", "text"})
 
 
 if __name__ == "__main__":
