@@ -1,4 +1,4 @@
-"""Recreate the paper's 96-source by 96-spatial-condition evaluation inputs.
+"""Create released 96-source by 96-spatial-condition evaluation inputs.
 
 The repository ships identifiers and synthetic-room metadata, but no
 YouTube-derived waveforms. Users provide lawful local copies of the 96 dry
@@ -185,14 +185,14 @@ def make_evaluation_manifest(
     seed: int = 42,
     check_files: bool = True,
 ) -> Path:
-    """Write the source-major 9,216-row manifest used for paper evaluation."""
+    """Write the released source-major 9,216-row evaluation manifest."""
     audio_rows = _read_csv(audio_catalog)
     rir_rows = sorted(
         _read_csv(rir_catalog), key=lambda row: str(row["rir_path"])
     )
     if len(audio_rows) != 96 or len(rir_rows) != 96:
         raise ValueError(
-            f"Paper evaluation needs 96 audio rows and 96 RIR rows; "
+            f"The released evaluation needs 96 audio rows and 96 RIR rows; "
             f"received {len(audio_rows)} and {len(rir_rows)}"
         )
 

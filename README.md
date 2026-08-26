@@ -41,7 +41,7 @@ The released experiment used PyTorch 2.7.0, torchaudio 2.7.0, and
 Transformers 4.52.4. A CUDA GPU is strongly recommended; CPU inference is
 supported but slow.
 
-To regenerate the paper's synthetic RIRs, also install the evaluation-data
+To generate the released synthetic RIR grid, also install the evaluation-data
 extra:
 
 ```bash
@@ -113,23 +113,36 @@ See [the data-format documentation](docs/data-format.md) for the public
 manifest format, legacy column aliases, FOA conventions, and precomputed
 feature shapes.
 
-## Recreate the paper evaluation
+## Run the IIDR evaluation
 
 The paper uses the Cartesian product of 96 AudioCaps source clips and 96
-synthetic spatial conditions (9,216 items). `evaluation/audio_fixed.csv` and
-`evaluation/rir_fixed.csv` identify that exact grid. Raw YouTube-derived audio
-is not included.
+synthetic spatial conditions (9,216 items). The released
+`evaluation/audio_fixed.csv` and `evaluation/rir_fixed.csv` define a grid that
+follows this evaluation protocol. See
+[Reproducibility notes](#reproducibility-notes) before comparing the resulting
+values with the paper.
 
-First, place lawful local copies of the 96 dry 10-second clips in one
-directory, named by `audiocap_id`, for example `104274.wav` or `104274.mp3`.
+Download the AudioCaps test archive and extract the 96 required MP3 files:
+
+```bash
+disse download evaluation-audio
+```
+
+This downloads the approximately 1.26 GiB archive from
+[ss-takashi.sakura.ne.jp](https://ss-takashi.sakura.ne.jp/corpus/audiocaps/test.zip),
+verifies its SHA-256 checksum, extracts only the clips listed in
+`evaluation/audio_fixed.csv` to `data/evaluation/dry/`, and removes the
+downloaded ZIP. The audio is third-party data and is not covered by this
+repository's MIT License; see [Data redistribution](#data-redistribution).
+
 Then run:
 
 ```bash
-# Recreate the 96 tetrahedral A-format RIRs from fixed room geometry.
+# Generate the 96 tetrahedral A-format RIRs from the released room geometry.
 disse generate-rirs
 
 # Make the 9,216-row manifest. Captions are regenerated with seed 42.
-disse make-evaluation-manifest --dry-root /path/to/local/dry_clips
+disse make-evaluation-manifest --dry-root data/evaluation/dry
 
 disse validate-manifest data/evaluation/manifest.csv
 
@@ -145,6 +158,7 @@ disse infer \
 
 disse evaluate \
   results/evaluation_embeddings.npz \
+  --iidr-only \
   --output results/evaluation_metrics.json
 ```
 
@@ -152,10 +166,12 @@ Manifest inference uses both modalities by default. To compute audio IIDR
 without evaluating the text branch, add `--modality audio`. Use
 `--modality text` for text-only extraction.
 
-This pipeline is distilled from `make_balanced_rirs_by_category.py`,
-`make_val_fixed.py`, and `precompute_val.py` in the research repository. See
-[the data-format documentation](docs/data-format.md) for the exact microphone,
-FOA, and manifest conventions.
+Remove `--iidr-only` to additionally compute the retrieval metrics implemented
+by this repository. This pipeline is distilled from
+`make_balanced_rirs_by_category.py`, `make_val_fixed.py`, and
+`precompute_val.py` in the research repository. See
+[the data-format documentation](docs/data-format.md) for the microphone, FOA,
+and manifest conventions.
 
 ## IIDR
 
@@ -172,16 +188,8 @@ Let (d(a,b)=1-\cos(a,b)). For one embedding space, DISSE reports:
 \]
 
 Larger target-factor IIDR and smaller non-target IIDR are desirable. The
-implementation is exact but avoids allocating a 9,216 x 9,216 distance matrix.
-
-Expected values from Table I of the paper are:
-
-| Modality | DISSE embedding | IIDR (source) | IIDR (spatial) |
-|---|---:|---:|---:|
-| Audio | Source | 5.5653 | 0.1797 |
-| Audio | Spatial | 0.2817 | 3.5493 |
-| Text | Source | 15.5462 | 0.0643 |
-| Text | Spatial | 0.1246 | 8.0247 |
+implementation avoids allocating a 9,216 x 9,216 distance matrix while
+computing the same mean pairwise cosine-distance quantities.
 
 `disse evaluate` also computes multi-positive R@K and MedR for the on-task,
 off-task, intra-modal, cross-modal, and joint source-and-spatial conditions in
@@ -190,6 +198,13 @@ Tables II and III. Exact definitions are in [docs/metrics.md](docs/metrics.md).
 ## Reproducibility notes
 
 - The paper evaluates 96 source clips crossed with 96 RIRs: 9,216 items.
+- This repository provides code for inference and IIDR computation, but does
+  not include the exact evaluation manifest and precomputed features used to
+  produce Table I. The released data-generation pipeline follows the protocol
+  described in the paper; it does not guarantee identical item selection or
+  numerical results.
+- Results may also vary because of audio decoding, spatialization, feature
+  extraction, software versions, and hardware.
 - Audio is four-channel FOA at 48 kHz and 10 seconds.
 - All four embeddings have dimension 512.
 - The released checkpoint is the standard DISSE model after epoch 20.
@@ -212,15 +227,20 @@ disse evaluate results/demo_embeddings.npz --iidr-only
 
 ## Data redistribution
 
+`disse download evaluation-audio` retrieves a third-party AudioCaps test
+archive from the URL recorded in `artifacts.json`. The archive and extracted
+audio are not distributed as part of this Git repository and are not covered
+by its MIT License. Users are responsible for complying with the applicable
+terms and for confirming that their use of the audio is lawful.
+
 AudioCaps captions and metadata are available from the
 [AudioCaps repository](https://github.com/cdjkim/audiocaps). The underlying
 clips are identified by YouTube video IDs. Google AudioSet distributes segment
 metadata and extracted features rather than the original YouTube audio; see
 the [official AudioSet download page](https://research.google.com/audioset/download.html).
 Users distributing derived FOA waveforms must independently confirm that they
-have the necessary rights. This repository instead performs evaluation from
-locally obtained clips and regenerated synthetic RIRs. See
-[DATA_NOTICE.md](DATA_NOTICE.md).
+have the necessary rights. This repository performs evaluation from downloaded
+dry clips and regenerated synthetic RIRs. See [DATA_NOTICE.md](DATA_NOTICE.md).
 
 ## Citation
 

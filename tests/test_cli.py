@@ -49,6 +49,17 @@ class InferenceCliTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "text inference requires --text"):
             _infer_modalities(args)
 
+    def test_evaluation_audio_download_reaches_specialized_downloader(self):
+        with patch("disse.download.download_evaluation_audio") as download:
+            main(["download", "evaluation-audio"])
+
+        download.assert_called_once_with(
+            manifest_path="artifacts.json",
+            catalog_path="evaluation/audio_fixed.csv",
+            output_dir="data/evaluation/dry",
+            force=False,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

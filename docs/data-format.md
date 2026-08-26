@@ -4,14 +4,17 @@
 
 ```text
 data/evaluation/
+├── dry/
+│   └── *.mp3
 ├── manifest.csv
 └── rirs/
     └── auto_*.wav
 ```
 
-`disse generate-rirs` recreates the 96 RIRs from `evaluation/rir_fixed.csv`.
-`disse make-evaluation-manifest` crosses them with the 96 locally supplied dry
-clips in `evaluation/audio_fixed.csv`.
+`disse download evaluation-audio` downloads the configured AudioCaps test
+archive and retains the 96 selected dry clips. `disse generate-rirs` creates
+the 96 RIRs from `evaluation/rir_fixed.csv`. `disse make-evaluation-manifest`
+crosses them with the 96 dry clips in `evaluation/audio_fixed.csv`.
 
 The generated `manifest.csv` has one row per source-spatial pair:
 

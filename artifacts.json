@@ -4,5 +4,11 @@
     "url": "https://drive.google.com/file/d/1fyEWNrfZe6bfsPmHqppof_dHMWu_Skmc/view?usp=drive_link",
     "sha256": "a38ffabd0db88e4d42335ef47895524bb3ebcc01ecd9a8cbf7ff555b40f98398",
     "output": "checkpoints/disse_epoch20.pt"
+  },
+  "evaluation-audio": {
+    "description": "AudioCaps test archive containing the dry evaluation clips",
+    "url": "https://ss-takashi.sakura.ne.jp/corpus/audiocaps/test.zip",
+    "sha256": "ae647a98141db903f5c17a2351dca626bc9f604a14ed60b29733272d0d551afe",
+    "output": "downloads/audiocaps_test.zip"
   }
 }
