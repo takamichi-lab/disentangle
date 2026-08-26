@@ -12,7 +12,7 @@ RIR_CATALOG = ROOT / "evaluation/rir_fixed.csv"
 
 
 class EvaluationDataTests(unittest.TestCase):
-    def test_released_catalogs_define_paper_grid(self):
+    def test_released_catalogs_define_96_by_96_grid(self):
         self.assertEqual(
             fixed_grid_summary(AUDIO_CATALOG, RIR_CATALOG),
             {"sources": 96, "spatial_conditions": 96, "pairs": 9216},

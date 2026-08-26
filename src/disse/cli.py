@@ -70,8 +70,10 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     download = subparsers.add_parser("download", help="Download a released artifact")
-    download.add_argument("artifact", choices=("checkpoint",))
+    download.add_argument("artifact", choices=("checkpoint", "evaluation-audio"))
     download.add_argument("--manifest", default="artifacts.json")
+    download.add_argument("--audio-catalog", default="evaluation/audio_fixed.csv")
+    download.add_argument("--output-dir", default="data/evaluation/dry")
     download.add_argument("--force", action="store_true")
 
     infer = subparsers.add_parser("infer", help="Extract DISSE embeddings")
@@ -113,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--seed", type=int, default=42)
 
     rirs = subparsers.add_parser(
-        "generate-rirs", help="Regenerate the paper's 96 fixed A-format RIRs"
+        "generate-rirs", help="Generate the released 96 fixed A-format RIRs"
     )
     rirs.add_argument("--catalog", default="evaluation/rir_fixed.csv")
     rirs.add_argument("--output-dir", default="data/evaluation/rirs")
@@ -121,7 +123,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     manifest = subparsers.add_parser(
         "make-evaluation-manifest",
-        help="Build the paper's 96 x 96 on-the-fly evaluation manifest",
+        help="Build the released 96 x 96 on-the-fly evaluation manifest",
     )
     manifest.add_argument("--dry-root", required=True)
     manifest.add_argument("--rir-root", default="data/evaluation/rirs")
@@ -173,9 +175,19 @@ def _infer_modalities(args: argparse.Namespace) -> tuple[str, ...]:
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     if args.command == "download":
-        from .download import download_artifact
+        from .download import download_artifact, download_evaluation_audio
 
-        download_artifact(args.artifact, manifest_path=args.manifest, force=args.force)
+        if args.artifact == "evaluation-audio":
+            download_evaluation_audio(
+                manifest_path=args.manifest,
+                catalog_path=args.audio_catalog,
+                output_dir=args.output_dir,
+                force=args.force,
+            )
+        else:
+            download_artifact(
+                args.artifact, manifest_path=args.manifest, force=args.force
+            )
         return
     if args.command == "demo-cache":
         path = _demo_cache(args.output, args.seed)
